@@ -3,4 +3,5 @@ cert.pem
 key.pem
 uploads/
 .env
+.env.*
 .DS_Store
