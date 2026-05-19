@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Meeting">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/static/manifest.json">
+  <title>Meeting Notes</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --accent: #6366f1;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --radius: 16px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; overscroll-behavior: none; }
+
+    .app { max-width: 480px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; padding: env(safe-area-inset-top, 20px) 16px env(safe-area-inset-bottom, 20px); }
+
+    /* Header */
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 16px; min-height: 52px; }
+    .topbar h1 { font-size: 20px; font-weight: 700; }
+    .topbar .back-btn { background: var(--surface); border: none; color: var(--text-muted); font-size: 14px; padding: 6px 14px; border-radius: 20px; cursor: pointer; }
+
+    /* Steps */
+    .steps { display: flex; gap: 6px; margin-bottom: 16px; }
+    .step { flex: 1; height: 3px; border-radius: 2px; background: var(--surface2); transition: background 0.3s; }
+    .step.active { background: var(--accent); }
+    .step.done { background: var(--success); }
+
+    /* Screens */
+    .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .screen.visible { display: flex; }
+
+    /* Cards / Lists */
+    .card { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; }
+    .label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+
+    /* Dossier list */
+    .search-bar { width: 100%; background: var(--surface); border: none; border-radius: 12px; padding: 12px 16px; font-size: 16px; color: var(--text); margin-bottom: 12px; outline: none; }
+    .search-bar::placeholder { color: var(--text-muted); }
+    .dossier-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .dossier-item { background: var(--surface); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s; }
+    .dossier-item:active { background: var(--surface2); }
+    .dossier-item .dossier-info { flex: 1; }
+    .dossier-item .dossier-name { font-size: 16px; font-weight: 600; }
+    .dossier-item .dossier-meta { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .dossier-item .dossier-badge { background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; margin-left: 12px; }
+    .empty-state { text-align: center; color: var(--text-muted); padding: 40px 20px; font-size: 15px; line-height: 1.6; }
+
+    /* Forms */
+    .form-field { margin-bottom: 14px; }
+    .form-field label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+    .form-field input { width: 100%; background: var(--surface2); border: none; border-radius: 12px; padding: 14px 16px; font-size: 16px; color: var(--text); outline: none; }
+    .form-field input:focus { box-shadow: 0 0 0 2px var(--accent); }
+    .form-field input::placeholder { color: var(--text-muted); }
+
+    /* Selected dossier banner */
+    .dossier-banner { background: var(--surface); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+    .dossier-banner .badge { background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+    .dossier-banner .name { font-size: 15px; font-weight: 600; }
+    .dossier-banner .change { font-size: 13px; color: var(--text-muted); margin-left: auto; cursor: pointer; }
+
+    /* Record */
+    .record-center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+    .record-ring { width: 140px; height: 140px; border-radius: 50%; background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.15s; }
+    .record-ring:active { transform: scale(0.95); }
+    .record-ring.recording { animation: pulse-ring 1.5s ease-in-out infinite; }
+    @keyframes pulse-ring { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 22px rgba(239,68,68,0); } }
+    .record-icon { width: 56px; height: 56px; border-radius: 50%; background: var(--danger); transition: all 0.2s; }
+    .record-ring.recording .record-icon { border-radius: 10px; width: 36px; height: 36px; }
+    .record-label { font-size: 16px; font-weight: 600; color: var(--text-muted); }
+    .timer { font-size: 40px; font-weight: 200; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
+
+    /* Transcript */
+    .transcript-box { flex: 1; background: var(--surface); border-radius: var(--radius); padding: 16px; font-size: 16px; line-height: 1.7; overflow-y: auto; outline: none; min-height: 140px; -webkit-overflow-scrolling: touch; }
+    .transcript-box:empty::before { content: "La transcription apparaîtra ici..."; color: var(--text-muted); }
+
+    /* Structured */
+    .structured-output { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .structured-output .section { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; }
+    .structured-output h2 { font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+    .structured-output p, .structured-output li { font-size: 15px; line-height: 1.6; }
+    .structured-output ul { padding-left: 18px; }
+    .structured-output li { margin-bottom: 3px; }
+    .save-badge { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.4); color: #86efac; border-radius: 10px; padding: 10px 14px; font-size: 13px; text-align: center; margin-bottom: 10px; }
+
+    /* Section editing */
+    .section { position: relative; transition: border 0.2s; border: 2px solid transparent; }
+    .section.editing { border-color: var(--accent); }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .section-header h2 { margin-bottom: 0; }
+    .edit-btn {
+      background: none; border: none; cursor: pointer; padding: 4px 8px;
+      font-size: 16px; border-radius: 8px; color: var(--text-muted);
+      transition: background 0.15s, color 0.15s; flex-shrink: 0;
+    }
+    .edit-btn:hover { background: var(--surface2); color: var(--text); }
+    .edit-btn.active { color: var(--success); }
+    .section-body[contenteditable="true"] {
+      outline: none; cursor: text;
+      background: rgba(99,102,241,0.05);
+      border-radius: 8px; padding: 8px;
+      min-height: 40px;
+    }
+    /* Collapse / expand */
+    .section-body.collapsed {
+      display: -webkit-box;
+      -webkit-line-clamp: 5;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .expand-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 0 0;
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+    }
+    .expand-btn.visible { display: block; }
+
+    /* Meeting history */
+    .meeting-item { background: var(--surface); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 8px; cursor: pointer; }
+    .meeting-item .meeting-date { font-size: 13px; color: var(--text-muted); }
+    .meeting-item .meeting-preview { font-size: 14px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .meeting-detail { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; }
+    .meeting-detail h2 { font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+    .meeting-detail p, .meeting-detail li { font-size: 15px; line-height: 1.6; }
+    .meeting-detail ul { padding-left: 18px; }
+    .meeting-detail li { margin-bottom: 3px; }
+
+    /* Buttons */
+    .btn { width: 100%; padding: 15px; border-radius: var(--radius); border: none; font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+    .btn:active { transform: scale(0.98); opacity: 0.85; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--surface2); color: var(--text); }
+    .btn-danger { background: rgba(239,68,68,0.15); color: #fca5a5; }
+    .btn-row { display: flex; gap: 8px; }
+    .btn-row .btn { flex: 1; font-size: 14px; padding: 13px; }
+
+    /* Loading */
+    .loading-overlay { display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 40px; flex: 1; }
+    .loading-overlay.visible { display: flex; }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--surface2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 15px; color: var(--text-muted); text-align: center; line-height: 1.5; }
+
+    /* Error */
+    .error-banner { display: none; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); border-radius: 12px; padding: 11px 14px; font-size: 13px; color: #fca5a5; margin-bottom: 10px; }
+    .error-banner.visible { display: block; }
+
+    .footer { padding-top: 10px; }
+    audio { width: 100%; border-radius: 10px; margin-top: 4px; accent-color: var(--accent); }
+
+    /* Footer nav */
+    .bottom-nav {
+      display: flex;
+      background: var(--surface);
+      border-radius: 20px;
+      padding: 6px;
+      margin-top: 10px;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 8px 4px;
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav-btn .nav-icon { font-size: 20px; line-height: 1; }
+    .nav-btn.active { background: var(--surface2); color: var(--text); }
+
+    /* Setup textarea */
+    .setup-textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: none;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 15px;
+      color: var(--text);
+      resize: none;
+      outline: none;
+      line-height: 1.6;
+      min-height: 180px;
+      font-family: inherit;
+    }
+    .setup-textarea::placeholder { color: var(--text-muted); }
+    .setup-textarea:focus { box-shadow: 0 0 0 2px var(--accent); }
+
+    /* Setup folders/items */
+    .sf-folder { background: var(--surface); border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; }
+    .sf-folder-header { display: flex; align-items: center; padding: 12px 14px; gap: 10px; cursor: pointer; }
+    .sf-folder-arrow { color: var(--text-muted); font-size: 11px; transition: transform 0.2s; }
+    .sf-folder-arrow.open { transform: rotate(180deg); }
+    .sf-folder-name { flex: 1; font-size: 15px; font-weight: 600; }
+    .sf-folder-actions { display: flex; gap: 6px; }
+    .sf-folder-actions button { background: none; border: none; color: var(--text-muted); font-size: 15px; cursor: pointer; padding: 4px; }
+    .sf-items { padding: 0 14px 12px; display: none; }
+    .sf-items.open { display: block; }
+    .sf-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid var(--surface2); }
+    .sf-item-body { flex: 1; }
+    .sf-item-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+    .sf-item-detail { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+    .sf-item-detail.collapsed {
+      display: -webkit-box;
+      -webkit-line-clamp: 5;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .sf-item-more {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 0 0;
+      cursor: pointer;
+      text-align: left;
+    }
+    .sf-item-more.visible { display: block; }
+    .sf-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .sf-item-actions button { background: none; border: none; color: var(--text-muted); font-size: 14px; cursor: pointer; padding: 4px; }
+    .sf-add-item { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--accent); font-size: 13px; font-weight: 600; padding: 8px 0 0; cursor: pointer; }
+    /* inline edit inputs */
+    .sf-inline-input { background: var(--surface2); border: none; border-radius: 8px; padding: 8px 10px; font-size: 14px; color: var(--text); outline: none; width: 100%; margin-bottom: 6px; font-family: inherit; }
+    .sf-inline-textarea { background: var(--surface2); border: none; border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--text); outline: none; width: 100%; resize: none; min-height: 70px; font-family: inherit; line-height: 1.5; }
+    .sf-inline-input:focus, .sf-inline-textarea:focus { box-shadow: 0 0 0 2px var(--accent); }
+    /* Q&A Neurosciences */
+    .fab-ask {
+      position: fixed; bottom: 32px; right: 16px;
+      width: 54px; height: 54px; border-radius: 50%;
+      background: var(--accent); color: #fff; border: none;
+      font-size: 22px; cursor: pointer;
+      display: none; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px rgba(99,102,241,0.45);
+      z-index: 50; transition: transform 0.15s;
+    }
+    .fab-ask:active { transform: scale(0.93); }
+    .ask-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 99;
+    }
+    .ask-backdrop.visible { display: block; }
+    .ask-panel {
+      display: none; position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--bg); border-radius: 20px 20px 0 0;
+      padding: 20px 16px env(safe-area-inset-bottom, 20px);
+      z-index: 100; flex-direction: column; gap: 12px;
+      max-height: 75vh;
+    }
+    .ask-panel.visible { display: flex; }
+    .ask-panel-header { display: flex; align-items: center; justify-content: space-between; }
+    .ask-panel-title { font-size: 16px; font-weight: 700; }
+    .ask-close { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; line-height: 1; }
+    .ask-input-row { display: flex; gap: 8px; }
+    .ask-input-row input { flex: 1; background: var(--surface2); border: none; border-radius: 12px; padding: 13px 14px; font-size: 15px; color: var(--text); outline: none; font-family: inherit; }
+    .ask-input-row input:focus { box-shadow: 0 0 0 2px var(--accent); }
+    .ask-send { background: var(--accent); color: #fff; border: none; border-radius: 12px; padding: 13px 18px; font-size: 18px; cursor: pointer; flex-shrink: 0; }
+    .ask-send:disabled { opacity: 0.4; cursor: not-allowed; }
+    .ask-loading { display: none; flex-direction: row; align-items: center; gap: 10px; padding: 4px 0; }
+    .ask-loading.visible { display: flex; }
+    .ask-loading .spinner { width: 22px; height: 22px; border-width: 2px; flex-shrink: 0; }
+    .ask-loading span { font-size: 13px; color: var(--text-muted); }
+    .ask-response {
+      display: none; background: var(--surface); border-radius: 12px;
+      padding: 14px 16px; font-size: 14px; line-height: 1.65;
+      color: var(--text); overflow-y: auto;
+      flex: 1; min-height: 60px;
+    }
+    .ask-response.visible { display: block; }
+
+    /* Checkboxes contexte IA dans le dossier */
+    .ctx-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-top: 1px solid var(--surface2); cursor: pointer; }
+    .ctx-item:first-child { border-top: none; }
+    .ctx-check { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--surface2); flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: all 0.15s; }
+    .ctx-check.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .ctx-label { flex: 1; }
+    .ctx-label-folder { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    .ctx-label-name { font-size: 14px; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar" id="topbar">
+    <h1 id="pageTitle">Dossiers</h1>
+    <button class="back-btn" id="backBtn" style="display:none" onclick="handleBack()">Retour</button>
+  </div>
+
+  <div class="steps" id="stepsBar" style="display:none">
+    <div class="step" id="s1"></div>
+    <div class="step" id="s2"></div>
+    <div class="step" id="s3"></div>
+  </div>
+
+  <div class="error-banner" id="errorBanner"></div>
+
+  <div class="content">
+
+    <!-- SCREEN: Liste des dossiers -->
+    <div class="screen visible" id="screenDossiers">
+      <input class="search-bar" id="searchInput" type="search" placeholder="Rechercher une patiente..." oninput="filterDossiers()">
+      <div class="dossier-list" id="dossierList"></div>
+      <div class="footer">
+        <button class="btn btn-primary" onclick="showScreen('screenNewDossier')">+ Nouveau dossier</button>
+      </div>
+    </div>
+
+    <!-- SCREEN: Nouveau dossier -->
+    <div class="screen" id="screenNewDossier">
+      <div class="form-field">
+        <label>Prénom</label>
+        <input type="text" id="inputPrenom" placeholder="ex : Marie" autocomplete="given-name">
+      </div>
+      <div class="form-field">
+        <label>Nom</label>
+        <input type="text" id="inputNom" placeholder="ex : Dupont" autocomplete="family-name">
+      </div>
+      <div class="footer" style="margin-top: auto; padding-top: 20px;">
+        <button class="btn btn-primary" onclick="createDossier()">Créer le dossier</button>
+      </div>
+    </div>
+
+    <!-- SCREEN: Détail dossier (historique meetings) -->
+    <div class="screen" id="screenDossierDetail">
+      <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;">
+        <div class="dossier-banner" id="detailBanner"></div>
+
+        <!-- Contexte IA associé -->
+        <div class="card" style="margin-bottom:10px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleContexteIA()">
+            <div class="label" style="margin-bottom:0;">Contexte IA</div>
+            <span id="contexteIAArrow" style="color:var(--text-muted); font-size:13px;">&#9660;</span>
+          </div>
+          <div id="contexteIAList" style="margin-top:12px; display:none;"></div>
+        </div>
+
+        <div class="label">Séances précédentes</div>
+        <div id="meetingList"></div>
+      </div>
+      <div class="footer">
+        <button class="btn btn-primary" onclick="startRecording()">+ Nouvelle séance</button>
+      </div>
+    </div>
+
+    <!-- SCREEN: Détail d'une séance -->
+    <div class="screen" id="screenMeetingDetail">
+      <div class="structured-output" id="meetingDetailOutput" style="overflow-y:auto; flex:1;"></div>
+      <div class="footer">
+        <div class="btn-row" style="margin-bottom:8px;">
+          <button class="btn btn-secondary" onclick="shareDetailText()">Partager</button>
+          <button class="btn btn-secondary" onclick="copyDetailText()">Copier</button>
+          <button class="btn btn-secondary" onclick="exportDetailToWord()">Exporter</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN: Enregistrement -->
+    <div class="screen" id="screenRecord">
+      <div id="recordBanner"></div>
+      <div class="record-center">
+        <div class="timer" id="timer">00:00</div>
+        <div class="record-ring" id="recordRing" onclick="toggleRecord()">
+          <div class="record-icon"></div>
+        </div>
+        <div class="record-label" id="recordLabel">Appuyez pour enregistrer</div>
+      </div>
+      <div style="text-align:center; color:var(--text-muted); font-size:13px; margin: 4px 0;">ou</div>
+      <button class="btn btn-secondary" style="margin-bottom:8px;" onclick="document.getElementById('importAudioInput').click()">&#128193; Importer un fichier audio</button>
+      <input type="file" id="importAudioInput" accept="audio/*,.mp3,.mp4,.m4a,.wav,.ogg,.webm,.aac,.flac" style="display:none" onchange="importAudioFile(this)">
+      <div id="playbackSection" style="display:none;">
+        <div class="card">
+          <div class="label">Écoute</div>
+          <audio id="audioPlayer" controls></audio>
+        </div>
+      </div>
+      <div class="footer">
+        <button class="btn btn-primary" id="transcribeBtn" onclick="goToTranscribe()" disabled>Transcrire la séance</button>
+      </div>
+    </div>
+
+    <!-- SCREEN: Transcription -->
+    <div class="screen" id="screenTranscript">
+      <div class="loading-overlay" id="loadingTranscript">
+        <div class="spinner"></div>
+        <div class="loading-text">Transcription en cours…<br><small style="opacity:0.6">Quelques instants</small></div>
+      </div>
+      <div id="transcriptContent" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+        <div class="label">Transcription — modifiable</div>
+        <div class="transcript-box" id="transcriptBox" contenteditable="true"></div>
+        <p style="font-size:12px; color:var(--text-muted); text-align:center; margin-top:8px;">Corrigez si nécessaire</p>
+      </div>
+      <div class="footer">
+        <button class="btn btn-primary" id="structureBtn" onclick="goToStructure()" disabled style="margin-top:10px;">Générer le compte rendu</button>
+      </div>
+    </div>
+
+    <!-- SCREEN: Profil -->
+    <div class="screen" id="screenProfil">
+      <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;">
+        <div class="form-field">
+          <label>Titre / Profession</label>
+          <input type="text" id="profilTitre" placeholder="ex : Psychologue, Médecin, Kinésithérapeute...">
+        </div>
+        <div class="form-field">
+          <label>Prénom</label>
+          <input type="text" id="profilPrenom" placeholder="Votre prénom" autocomplete="given-name">
+        </div>
+        <div class="form-field">
+          <label>Nom</label>
+          <input type="text" id="profilNom" placeholder="Votre nom" autocomplete="family-name">
+        </div>
+        <div class="form-field">
+          <label>Cabinet / Structure</label>
+          <input type="text" id="profilCabinet" placeholder="ex : Cabinet libéral, Hôpital Sainte-Anne...">
+        </div>
+      </div>
+      <div class="footer">
+        <button class="btn btn-primary" onclick="saveProfil()">Enregistrer</button>
+      </div>
+    </div>
+
+    <!-- SCREEN: Setup IA -->
+    <div class="screen" id="screenSetup">
+      <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;" id="setupScroll">
+
+        <!-- Instructions générales -->
+        <div class="label">Instructions générales</div>
+        <textarea class="setup-textarea" id="setupContext" style="min-height:90px; margin-bottom:16px;"
+          placeholder="Ex : Compte rendu factuel sans interprétation, vouvoiement..."></textarea>
+        <button class="btn btn-secondary" onclick="saveSetup()" style="margin-bottom:20px; padding:10px;">Enregistrer les instructions</button>
+
+        <!-- Dossiers & items -->
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <div class="label" style="margin-bottom:0;">Dossiers de contexte</div>
+          <button onclick="createFolder()" style="background:none; border:none; color:var(--accent); font-size:13px; font-weight:600; cursor:pointer;">+ Dossier</button>
+        </div>
+        <div id="setupFolderList"></div>
+
+      </div>
+    </div>
+
+    <!-- SCREEN: Compte rendu -->
+    <div class="screen" id="screenStructured">
+      <div class="loading-overlay" id="loadingStructure">
+        <div class="spinner"></div>
+        <div class="loading-text">Génération du compte rendu…</div>
+      </div>
+      <div id="structuredContent" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+        <div class="save-badge" id="saveBadge" style="display:none;">Séance enregistrée dans le dossier</div>
+        <div class="structured-output" id="structuredOutput"></div>
+      </div>
+      <div class="footer">
+        <div class="btn-row" style="margin-bottom:8px;">
+          <button class="btn btn-secondary" onclick="shareText()">Partager</button>
+          <button class="btn btn-secondary" onclick="copyText()">Copier</button>
+          <button class="btn btn-secondary" onclick="exportToWord()">Exporter</button>
+        </div>
+        <button class="btn btn-primary" onclick="backToDossier()">Retour au dossier</button>
+      </div>
+    </div>
+
+  </div><!-- end content -->
+
+  <!-- FOOTER NAV -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="nav-btn active" id="navDossiers" onclick="navTo('dossiers')">
+      <span class="nav-icon">&#128193;</span>Dossiers
+    </button>
+    <button class="nav-btn" id="navProfil" onclick="navTo('profil')">
+      <span class="nav-icon">&#128100;</span>Profil
+    </button>
+    <button class="nav-btn" id="navSetup" onclick="navTo('setup')">
+      <span class="nav-icon">&#9881;</span>Setup IA
+    </button>
+  </nav>
+
+  <!-- Bouton flottant Q&A -->
+  <button class="fab-ask" id="fabAsk" onclick="openAskPanel()">?</button>
+
+  <!-- Panneau Q&A Neurosciences -->
+  <div class="ask-backdrop" id="askBackdrop" onclick="closeAskPanel()"></div>
+  <div class="ask-panel" id="askPanel">
+    <div class="ask-panel-header">
+      <div class="ask-panel-title">Question — Neurosciences</div>
+      <button class="ask-close" onclick="closeAskPanel()">×</button>
+    </div>
+    <div class="ask-input-row">
+      <input id="askInput" type="text" placeholder="Posez votre question..."
+             onkeydown="if(event.key==='Enter') submitQuestion()">
+      <button class="ask-send" id="askSendBtn" onclick="submitQuestion()">↑</button>
+    </div>
+    <div class="ask-loading" id="askLoading">
+      <div class="spinner"></div>
+      <span>Recherche en cours…</span>
+    </div>
+    <div class="ask-response" id="askResponse"></div>
+  </div>
+
+</div><!-- end app -->
+
+<script>
+// =====================
+// STATE
+// =====================
+let currentDossier = null;
+let currentScreen = 'screenDossiers';
+let allDossiers = [];
+let mediaRecorder = null;
+let audioChunks = [];
+let audioBlob = null;
+let recordingInterval = null;
+let secondsElapsed = 0;
+let isRecording = false;
+let currentTranscription = '';
+let currentStructured = '';
+let viewingMeeting = null;
+let viewingMeetingIndex = -1;
+
+// =====================
+// NAVIGATION
+// =====================
+function showScreen(id, title, showBack, showSteps) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('visible'));
+  document.getElementById(id).classList.add('visible');
+  document.getElementById('pageTitle').textContent = title || screenTitles[id] || '';
+  document.getElementById('backBtn').style.display = showBack ? 'block' : 'none';
+  document.getElementById('stepsBar').style.display = showSteps ? 'flex' : 'none';
+  currentScreen = id;
+}
+
+const screenTitles = {
+  screenDossiers: 'Dossiers',
+  screenNewDossier: 'Nouveau dossier',
+  screenDossierDetail: '',
+  screenMeetingDetail: 'Compte rendu',
+  screenRecord: 'Enregistrement',
+  screenTranscript: 'Transcription',
+  screenStructured: 'Compte rendu',
+};
+
+function handleBack() {
+  if (currentScreen === 'screenNewDossier') { showScreen('screenDossiers'); loadDossiers(); }
+  else if (currentScreen === 'screenDossierDetail') { showScreen('screenDossiers'); loadDossiers(); }
+  else if (currentScreen === 'screenMeetingDetail') { openDossier(currentDossier); }
+  else if (currentScreen === 'screenRecord') { openDossier(currentDossier); }
+  else if (currentScreen === 'screenTranscript') { showScreen('screenRecord', 'Enregistrement', true, true); setSteps(1); }
+  else if (currentScreen === 'screenStructured') { backToDossier(); }
+}
+
+function setSteps(active) {
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('s' + i);
+    el.className = 'step' + (i < active ? ' done' : i === active ? ' active' : '');
+  }
+}
+
+// =====================
+// ERROR
+// =====================
+function showError(msg) {
+  const b = document.getElementById('errorBanner');
+  b.textContent = msg;
+  b.classList.add('visible');
+  setTimeout(() => b.classList.remove('visible'), 5000);
+}
+
+// =====================
+// DOSSIERS
+// =====================
+async function loadDossiers() {
+  const resp = await fetch('/dossiers');
+  const data = await resp.json();
+  allDossiers = data.dossiers.slice().reverse();
+  renderDossiers(allDossiers);
+}
+
+function renderDossiers(list) {
+  const container = document.getElementById('dossierList');
+  if (list.length === 0) {
+    container.innerHTML = '<div class="empty-state">Aucun dossier.<br>Créez le premier dossier patiente.</div>';
+    return;
+  }
+  container.innerHTML = list.map(d => `
+    <div class="dossier-item" onclick="openDossier(${JSON.stringify(d).replace(/"/g,'&quot;')})">
+      <div class="dossier-info">
+        <div class="dossier-name">${d.prenom} ${d.nom}</div>
+        <div class="dossier-meta">${d.meetings.length} séance${d.meetings.length > 1 ? 's' : ''} · Créé le ${formatDate(d.created_at)}</div>
+      </div>
+      <div class="dossier-badge">N° ${d.id}</div>
+    </div>
+  `).join('');
+}
+
+function filterDossiers() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  renderDossiers(allDossiers.filter(d =>
+    (d.nom + ' ' + d.prenom).toLowerCase().includes(q)
+  ));
+}
+
+async function createDossier() {
+  const prenom = document.getElementById('inputPrenom').value.trim();
+  const nom = document.getElementById('inputNom').value.trim();
+  if (!prenom || !nom) { showError('Prénom et nom requis'); return; }
+  const resp = await fetch('/dossiers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prenom, nom })
+  });
+  const dossier = await resp.json();
+  if (!resp.ok) { showError(dossier.detail); return; }
+  document.getElementById('inputPrenom').value = '';
+  document.getElementById('inputNom').value = '';
+  currentDossier = dossier;
+  openDossier(dossier);
+}
+
+function openDossier(d) {
+  currentDossier = d;
+  // Reload fresh data
+  fetch('/dossiers').then(r => r.json()).then(data => {
+    const fresh = data.dossiers.find(x => x.id === d.id) || d;
+    currentDossier = fresh;
+    const banner = document.getElementById('detailBanner');
+    banner.innerHTML = `<div class="badge">N° ${fresh.id}</div><div class="name">${fresh.prenom} ${fresh.nom}</div>`;
+    renderMeetings(fresh);
+    showScreen('screenDossierDetail', `${fresh.prenom} ${fresh.nom}`, true, false);
+  });
+}
+
+function renderMeetings(dossier) {
+  const container = document.getElementById('meetingList');
+  const meetings = dossier.meetings.slice().reverse();
+  if (meetings.length === 0) {
+    container.innerHTML = '<div class="empty-state">Aucune séance.<br>Démarrez le premier enregistrement.</div>';
+    return;
+  }
+  container.innerHTML = meetings.map((m, i) => {
+    const realIndex = dossier.meetings.length - 1 - i;
+    const preview = m.compte_rendu.split('\n').find(l => l && !l.startsWith('#')) || '';
+    return `
+      <div class="meeting-item" onclick="openMeeting(${realIndex})">
+        <div class="meeting-date">Séance du ${formatDateFull(m.date)}</div>
+        <div class="meeting-preview">${preview}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openMeeting(index) {
+  const meeting = currentDossier.meetings[index];
+  viewingMeeting = meeting;
+  viewingMeetingIndex = index;
+  const output = document.getElementById('meetingDetailOutput');
+  output.innerHTML = '';
+  renderStructuredInto(meeting.compte_rendu, output);
+  showScreen('screenMeetingDetail', 'Compte rendu', true, false);
+}
+
+// =====================
+// RECORDING
+// =====================
+function startRecording() {
+  document.getElementById('bottomNav').style.display = 'none';
+  const banner = document.getElementById('recordBanner');
+  if (currentDossier) {
+    banner.innerHTML = `<div class="dossier-banner"><div class="badge">N° ${currentDossier.id}</div><div class="name">${currentDossier.prenom} ${currentDossier.nom}</div></div>`;
+  }
+  audioBlob = null;
+  secondsElapsed = 0;
+  isRecording = false;
+  clearInterval(recordingInterval);
+  document.getElementById('timer').textContent = '00:00';
+  document.getElementById('recordRing').classList.remove('recording');
+  document.getElementById('recordLabel').textContent = 'Appuyez pour enregistrer';
+  document.getElementById('playbackSection').style.display = 'none';
+  document.getElementById('transcribeBtn').disabled = true;
+  showScreen('screenRecord', 'Enregistrement', true, true);
+  setSteps(1);
+}
+
+async function toggleRecord() {
+  isRecording ? stopRec() : await startRec();
+}
+
+async function startRec() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
+                   : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/mp4' });
+      document.getElementById('audioPlayer').src = URL.createObjectURL(audioBlob);
+      document.getElementById('playbackSection').style.display = 'block';
+      document.getElementById('transcribeBtn').disabled = false;
+    };
+    mediaRecorder.start(500);
+    isRecording = true;
+    document.getElementById('recordRing').classList.add('recording');
+    document.getElementById('recordLabel').textContent = 'Appuyez pour arrêter';
+    document.getElementById('transcribeBtn').disabled = true;
+    document.getElementById('playbackSection').style.display = 'none';
+    recordingInterval = setInterval(() => {
+      secondsElapsed++;
+      const m = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+      const s = String(secondsElapsed % 60).padStart(2, '0');
+      document.getElementById('timer').textContent = `${m}:${s}`;
+    }, 1000);
+  } catch (e) {
+    showError('Accès au microphone refusé. Autorisez-le dans Réglages > Safari.');
+  }
+}
+
+function stopRec() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  clearInterval(recordingInterval);
+  isRecording = false;
+  document.getElementById('recordRing').classList.remove('recording');
+  document.getElementById('recordLabel').textContent = 'Appuyez pour enregistrer';
+}
+
+function importAudioFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (isRecording) stopRec();
+  audioBlob = file;
+  document.getElementById('audioPlayer').src = URL.createObjectURL(file);
+  document.getElementById('playbackSection').style.display = 'block';
+  document.getElementById('transcribeBtn').disabled = false;
+  const shortName = file.name.length > 30 ? file.name.slice(0, 27) + '…' : file.name;
+  document.getElementById('recordLabel').textContent = shortName;
+  document.getElementById('timer').textContent = '';
+  input.value = '';
+}
+
+// =====================
+// TRANSCRIPTION
+// =====================
+async function goToTranscribe() {
+  if (!audioBlob) return;
+  showScreen('screenTranscript', 'Transcription', false, true);
+  setSteps(2);
+  document.getElementById('loadingTranscript').classList.add('visible');
+  document.getElementById('transcriptContent').style.display = 'none';
+  document.getElementById('structureBtn').disabled = true;
+
+  try {
+    const filename = audioBlob.name || (audioBlob.type.includes('mp4') ? 'recording.mp4' : 'recording.webm');
+    const formData = new FormData();
+    formData.append('audio', audioBlob, filename);
+    const resp = await fetch('/transcribe', { method: 'POST', body: formData });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Erreur transcription');
+    currentTranscription = data.transcription;
+    document.getElementById('transcriptBox').innerText = currentTranscription;
+    document.getElementById('structureBtn').disabled = false;
+  } catch (e) {
+    showError(e.message);
+    showScreen('screenRecord', 'Enregistrement', true, true);
+    setSteps(1);
+    return;
+  } finally {
+    document.getElementById('loadingTranscript').classList.remove('visible');
+  }
+  document.getElementById('transcriptContent').style.display = 'flex';
+}
+
+// =====================
+// STRUCTURATION
+// =====================
+async function goToStructure() {
+  const transcription = document.getElementById('transcriptBox').innerText.trim();
+  if (!transcription) return;
+  currentTranscription = transcription;
+  showScreen('screenStructured', 'Compte rendu', false, true);
+  setSteps(3);
+  document.getElementById('loadingStructure').classList.add('visible');
+  document.getElementById('structuredContent').style.display = 'none';
+
+  try {
+    const resp = await fetch('/structure', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transcription,
+        prenom:      currentDossier?.prenom     || '',
+        nom:         currentDossier?.nom        || '',
+        dossier_id:  currentDossier?.id         || null
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Erreur structuration');
+    currentStructured = data.structured;
+    const output = document.getElementById('structuredOutput');
+    output.innerHTML = '';
+    renderStructuredInto(currentStructured, output);
+
+    // Sauvegarde automatique dans le dossier
+    if (currentDossier) {
+      await fetch(`/dossiers/${currentDossier.id}/meetings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcription: currentTranscription, compte_rendu: currentStructured })
+      });
+      document.getElementById('saveBadge').style.display = 'block';
+    }
+  } catch (e) {
+    showError(e.message);
+    showScreen('screenTranscript', 'Transcription', false, true);
+    setSteps(2);
+    return;
+  } finally {
+    document.getElementById('loadingStructure').classList.remove('visible');
+  }
+  document.getElementById('structuredContent').style.display = 'flex';
+}
+
+// =====================
+// RENDER STRUCTURED TEXT
+// =====================
+function renderStructuredInto(text, container) {
+  const sections = text.split(/(?=^## )/m);
+  sections.forEach(section => {
+    if (!section.trim()) return;
+    const lines = section.trim().split('\n');
+    const title = lines[0].replace(/^##\s*/, '').trim();
+    const body = lines.slice(1).join('\n').trim();
+
+    const div = document.createElement('div');
+    div.className = 'section';
+    div.dataset.title = title;
+
+    // Header avec titre + bouton édition
+    const header = document.createElement('div');
+    header.className = 'section-header';
+    const h = document.createElement('h2');
+    h.textContent = title;
+    const editBtn = document.createElement('button');
+    editBtn.className = 'edit-btn';
+    editBtn.innerHTML = '&#9998;';
+    editBtn.title = 'Modifier';
+    editBtn.onclick = () => toggleSectionEdit(editBtn, div);
+    header.appendChild(h);
+    header.appendChild(editBtn);
+    div.appendChild(header);
+
+    // Corps de la section
+    const bodyDiv = document.createElement('div');
+    bodyDiv.className = 'section-body';
+    bodyDiv.contentEditable = 'false';
+    let ul = null;
+    body.split('\n').forEach(line => {
+      line = line.trim();
+      if (!line) return;
+      if (line.startsWith('- ') || line.startsWith('• ')) {
+        if (!ul) { ul = document.createElement('ul'); bodyDiv.appendChild(ul); }
+        const li = document.createElement('li');
+        li.textContent = line.replace(/^[-•]\s*/, '');
+        ul.appendChild(li);
+      } else {
+        ul = null;
+        const p = document.createElement('p');
+        p.textContent = line;
+        bodyDiv.appendChild(p);
+      }
+    });
+    // Collapse + bouton "voir plus"
+    bodyDiv.classList.add('collapsed');
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'expand-btn';
+    expandBtn.onclick = () => toggleExpand(bodyDiv, expandBtn);
+    div.appendChild(bodyDiv);
+    div.appendChild(expandBtn);
+    container.appendChild(div);
+
+    // Affiche le bouton seulement si le contenu déborde
+    requestAnimationFrame(() => {
+      if (bodyDiv.scrollHeight > bodyDiv.clientHeight + 2) {
+        expandBtn.textContent = '... Voir plus';
+        expandBtn.classList.add('visible');
+      }
+    });
+  });
+}
+
+function toggleExpand(bodyDiv, btn) {
+  const isCollapsed = bodyDiv.classList.contains('collapsed');
+  bodyDiv.classList.toggle('collapsed', !isCollapsed);
+  btn.textContent = isCollapsed ? 'Voir moins' : '... Voir plus';
+}
+
+// =====================
+// EDITION PAR SECTION
+// =====================
+function toggleSectionEdit(btn, sectionDiv) {
+  const body = sectionDiv.querySelector('.section-body');
+  const expandBtn = sectionDiv.querySelector('.expand-btn');
+  const isEditing = body.contentEditable === 'true';
+
+  if (isEditing) {
+    // Valider — remettre le collapse
+    body.contentEditable = 'false';
+    body.classList.add('collapsed');
+    btn.innerHTML = '&#9998;';
+    btn.classList.remove('active');
+    sectionDiv.classList.remove('editing');
+    // Réévaluer si le bouton doit être visible
+    requestAnimationFrame(() => {
+      if (expandBtn) {
+        const overflows = body.scrollHeight > body.clientHeight + 2;
+        expandBtn.classList.toggle('visible', overflows);
+        if (overflows) expandBtn.textContent = '... Voir plus';
+      }
+    });
+    saveStructuredChanges();
+  } else {
+    // Activer l'édition — tout afficher
+    body.classList.remove('collapsed');
+    if (expandBtn) expandBtn.classList.remove('visible');
+    body.contentEditable = 'true';
+    body.focus();
+    btn.innerHTML = '&#10003;';
+    btn.classList.add('active');
+    sectionDiv.classList.add('editing');
+    // Placer le curseur à la fin
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.selectNodeContents(body);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
+function reconstructStructuredText(container) {
+  return Array.from(container.querySelectorAll('.section')).map(s => {
+    const title = s.dataset.title;
+    const body = s.querySelector('.section-body').innerText.trim();
+    return `## ${title}\n${body}`;
+  }).join('\n\n');
+}
+
+async function saveStructuredChanges() {
+  if (!currentDossier) return;
+  const isDetail = currentScreen === 'screenMeetingDetail';
+  const container = isDetail
+    ? document.getElementById('meetingDetailOutput')
+    : document.getElementById('structuredOutput');
+  const newText = reconstructStructuredText(container);
+  const meetingIndex = isDetail ? viewingMeetingIndex : currentDossier.meetings.length - 1;
+  if (meetingIndex < 0) return;
+
+  try {
+    await fetch(`/dossiers/${currentDossier.id}/meetings/${meetingIndex}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ compte_rendu: newText })
+    });
+    if (isDetail && viewingMeeting) viewingMeeting.compte_rendu = newText;
+  } catch (e) {
+    showError('Erreur lors de la sauvegarde');
+  }
+}
+
+// =====================
+// SHARE / COPY
+// =====================
+function shareText() {
+  const text = document.getElementById('structuredOutput').innerText;
+  const title = currentDossier ? `Séance — ${currentDossier.prenom} ${currentDossier.nom} (N°${currentDossier.id})` : 'Compte rendu';
+  navigator.share ? navigator.share({ title, text }) : navigator.clipboard.writeText(text);
+}
+function copyText() {
+  navigator.clipboard.writeText(document.getElementById('structuredOutput').innerText)
+    .then(() => alert('Copié !'));
+}
+function shareDetailText() {
+  if (!viewingMeeting) return;
+  const text = document.getElementById('meetingDetailOutput').innerText;
+  const title = currentDossier ? `Séance — ${currentDossier.prenom} ${currentDossier.nom}` : 'Compte rendu';
+  navigator.share ? navigator.share({ title, text }) : navigator.clipboard.writeText(text);
+}
+function copyDetailText() {
+  navigator.clipboard.writeText(document.getElementById('meetingDetailOutput').innerText)
+    .then(() => alert('Copié !'));
+}
+
+async function exportToWord() {
+  const text = currentStructured || reconstructStructuredText(document.getElementById('structuredOutput'));
+  const patiente = currentDossier ? `${currentDossier.prenom} ${currentDossier.nom}` : '';
+  const numero = currentDossier?.id || null;
+  const date = viewingMeeting?.date
+    ? formatDateFull(viewingMeeting.date)
+    : formatDateFull(new Date().toISOString());
+  await downloadDocx(text, patiente, numero, date);
+}
+
+async function exportDetailToWord() {
+  if (!viewingMeeting) return;
+  const text = reconstructStructuredText(document.getElementById('meetingDetailOutput'));
+  const patiente = currentDossier ? `${currentDossier.prenom} ${currentDossier.nom}` : '';
+  const numero = currentDossier?.id || null;
+  const date = formatDateFull(viewingMeeting.date);
+  await downloadDocx(text, patiente, numero, date);
+}
+
+async function downloadDocx(text, patiente, numero, date) {
+  try {
+    const resp = await fetch('/export-docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, patiente, numero, date })
+    });
+    if (!resp.ok) throw new Error('Erreur export');
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="(.+?)"/);
+    a.download = match ? match[1] : 'compte_rendu.docx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    showError('Erreur lors de l\'export Word');
+  }
+}
+
+function backToDossier() {
+  if (currentDossier) openDossier(currentDossier);
+  else { navTo('dossiers'); loadDossiers(); }
+}
+
+// =====================
+// UTILS
+// =====================
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function formatDateFull(iso) {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// =====================
+// FOOTER NAV
+// =====================
+const NAV_SCREENS = { dossiers: 'screenDossiers', profil: 'screenProfil', setup: 'screenSetup' };
+const NAV_TITLES  = { dossiers: 'Dossiers', profil: 'Profil', setup: 'Setup IA' };
+let currentNav = 'dossiers';
+
+function navTo(tab) {
+  currentNav = tab;
+  ['dossiers','profil','setup'].forEach(t => {
+    document.getElementById('nav' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+  });
+  showScreen(NAV_SCREENS[tab], NAV_TITLES[tab], false, false);
+  document.getElementById('bottomNav').style.display = 'flex';
+  if (tab === 'profil') loadProfilFields();
+  if (tab === 'setup')  loadSetupField();
+}
+
+function setNavVisible(visible) {
+  document.getElementById('bottomNav').style.display = visible ? 'flex' : 'none';
+}
+
+// Override showScreen to hide nav during recording flow
+const _origShowScreen = showScreen;
+showScreen = function(id, title, showBack, showSteps) {
+  _origShowScreen(id, title, showBack, showSteps);
+  const inFlow = ['screenRecord','screenTranscript','screenStructured',
+                  'screenDossierDetail','screenMeetingDetail','screenNewDossier'].includes(id);
+  document.getElementById('bottomNav').style.display = inFlow ? 'none' : 'flex';
+  const fabScreens = ['screenStructured', 'screenMeetingDetail'];
+  document.getElementById('fabAsk').style.display = fabScreens.includes(id) ? 'flex' : 'none';
+  if (!inFlow) {
+    const tab = Object.entries(NAV_SCREENS).find(([,v]) => v === id)?.[0];
+    if (tab) {
+      ['dossiers','profil','setup'].forEach(t => {
+        document.getElementById('nav' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+      });
+    }
+  }
+};
+
+// =====================
+// PROFIL
+// =====================
+async function loadProfilFields() {
+  const s = await fetch('/settings').then(r => r.json());
+  const p = s.profil || {};
+  document.getElementById('profilTitre').value   = p.titre   || '';
+  document.getElementById('profilPrenom').value  = p.prenom  || '';
+  document.getElementById('profilNom').value     = p.nom     || '';
+  document.getElementById('profilCabinet').value = p.cabinet || '';
+}
+
+async function saveProfil() {
+  await fetch('/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profil: {
+      titre:   document.getElementById('profilTitre').value.trim(),
+      prenom:  document.getElementById('profilPrenom').value.trim(),
+      nom:     document.getElementById('profilNom').value.trim(),
+      cabinet: document.getElementById('profilCabinet').value.trim(),
+    }})
+  });
+  showError(''); // clear errors
+  alert('Profil enregistré.');
+}
+
+// =====================
+// SETUP IA — instructions générales
+// =====================
+async function loadSetupField() {
+  const s = await fetch('/settings').then(r => r.json());
+  document.getElementById('setupContext').value = s.setup?.context || '';
+  renderSetupFolders(s.setup?.folders || []);
+}
+
+async function saveSetup() {
+  await fetch('/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ setup: { context: document.getElementById('setupContext').value.trim() }})
+  });
+  alert('Instructions enregistrées.');
+}
+
+// =====================
+// SETUP IA — dossiers & items
+// =====================
+function renderSetupFolders(folders) {
+  const container = document.getElementById('setupFolderList');
+  if (!folders.length) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--text-muted); text-align:center; padding:16px 0;">Aucun dossier. Créez votre premier dossier de contexte.</p>';
+    return;
+  }
+  container.innerHTML = folders.map(f => `
+    <div class="sf-folder" id="sfFolder-${f.id}">
+      <div class="sf-folder-header" onclick="toggleFolder('${f.id}')">
+        <span class="sf-folder-arrow" id="sfArrow-${f.id}">&#9650;</span>
+        <span class="sf-folder-name" id="sfFolderName-${f.id}">${f.name}</span>
+        <div class="sf-folder-actions" onclick="event.stopPropagation()">
+          <button onclick="editFolderName('${f.id}')" title="Renommer">&#9998;</button>
+          <button onclick="deleteFolder('${f.id}')" title="Supprimer">&#10005;</button>
+        </div>
+      </div>
+      <div class="sf-items open" id="sfItems-${f.id}">
+        ${f.items.map(i => renderItem(f.id, i)).join('')}
+        <button class="sf-add-item" onclick="addItem('${f.id}')">+ Ajouter un item</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Affiche les boutons "Voir plus" uniquement si le texte déborde réellement
+  requestAnimationFrame(() => {
+    container.querySelectorAll('.sf-item-detail.collapsed').forEach(el => {
+      if (el.scrollHeight > el.clientHeight + 2) {
+        const btn = document.getElementById(el.id.replace('sfDetail-', 'sfMore-'));
+        if (btn) btn.classList.add('visible');
+      }
+    });
+  });
+}
+
+function renderItem(fid, item) {
+  const detailId = `sfDetail-${item.id}`;
+  const moreId   = `sfMore-${item.id}`;
+  return `
+    <div class="sf-item" id="sfItem-${item.id}">
+      <div class="sf-item-body">
+        <div class="sf-item-name">${item.name}</div>
+        ${item.detail ? `
+          <div class="sf-item-detail collapsed" id="${detailId}">${item.detail}</div>
+          <button class="sf-item-more" id="${moreId}" onclick="toggleItemDetail('${detailId}','${moreId}')">... Voir plus</button>
+        ` : ''}
+      </div>
+      <div class="sf-item-actions">
+        <button onclick="editItem('${fid}','${item.id}','${encodeURIComponent(item.name)}','${encodeURIComponent(item.detail||'')}')" title="Modifier">&#9998;</button>
+        <button onclick="deleteItem('${fid}','${item.id}')" title="Supprimer">&#10005;</button>
+      </div>
+    </div>`;
+}
+
+function toggleItemDetail(detailId, moreId) {
+  const el   = document.getElementById(detailId);
+  const btn  = document.getElementById(moreId);
+  const isCollapsed = el.classList.contains('collapsed');
+  el.classList.toggle('collapsed', !isCollapsed);
+  btn.textContent = isCollapsed ? 'Voir moins' : '... Voir plus';
+}
+
+function toggleFolder(fid) {
+  const items = document.getElementById('sfItems-' + fid);
+  const arrow = document.getElementById('sfArrow-' + fid);
+  const open = items.classList.toggle('open');
+  arrow.classList.toggle('open', !open);
+}
+
+async function createFolder() {
+  const name = prompt('Nom du dossier :');
+  if (!name?.trim()) return;
+  await fetch('/settings/folders', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name.trim() })
+  });
+  await reloadSetupFolders();
+}
+
+async function editFolderName(fid) {
+  const current = document.getElementById('sfFolderName-' + fid).textContent;
+  const name = prompt('Nouveau nom :', current);
+  if (!name?.trim() || name.trim() === current) return;
+  await fetch(`/settings/folders/${fid}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name.trim() })
+  });
+  await reloadSetupFolders();
+}
+
+async function deleteFolder(fid) {
+  if (!confirm('Supprimer ce dossier et tous ses items ?')) return;
+  await fetch(`/settings/folders/${fid}`, { method: 'DELETE' });
+  await reloadSetupFolders();
+}
+
+async function addItem(fid) {
+  const container = document.getElementById('sfItems-' + fid);
+  const addBtn = container.querySelector('.sf-add-item');
+  // Injecter un formulaire inline
+  const formId = 'newItemForm-' + fid;
+  if (document.getElementById(formId)) return;
+  const form = document.createElement('div');
+  form.id = formId;
+  form.innerHTML = `
+    <input class="sf-inline-input" id="newItemName-${fid}" placeholder="Nom (ex : Anxiété généralisée)" />
+    <textarea class="sf-inline-textarea" id="newItemDetail-${fid}" placeholder="Détail utilisé par l'IA pour le compte rendu..."></textarea>
+    <div class="btn-row" style="margin-top:6px;">
+      <button class="btn btn-secondary" style="padding:8px; font-size:13px;" onclick="cancelAddItem('${fid}')">Annuler</button>
+      <button class="btn btn-primary" style="padding:8px; font-size:13px;" onclick="confirmAddItem('${fid}')">Ajouter</button>
+    </div>`;
+  container.insertBefore(form, addBtn);
+}
+
+function cancelAddItem(fid) {
+  document.getElementById('newItemForm-' + fid)?.remove();
+}
+
+async function confirmAddItem(fid) {
+  const name   = document.getElementById('newItemName-' + fid).value.trim();
+  const detail = document.getElementById('newItemDetail-' + fid).value.trim();
+  if (!name) { alert('Nom requis'); return; }
+  await fetch(`/settings/folders/${fid}/items`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, detail })
+  });
+  await reloadSetupFolders();
+}
+
+async function editItem(fid, iid, encodedName, encodedDetail) {
+  const name   = decodeURIComponent(encodedName);
+  const detail = decodeURIComponent(encodedDetail);
+  const itemEl = document.getElementById('sfItem-' + iid);
+  if (!itemEl) return;
+  itemEl.innerHTML = `
+    <div style="flex:1;">
+      <input class="sf-inline-input" id="editName-${iid}" value="${name.replace(/"/g,'&quot;')}" />
+      <textarea class="sf-inline-textarea" id="editDetail-${iid}">${detail}</textarea>
+      <div class="btn-row" style="margin-top:6px;">
+        <button class="btn btn-secondary" style="padding:8px; font-size:13px;" onclick="reloadSetupFolders()">Annuler</button>
+        <button class="btn btn-primary" style="padding:8px; font-size:13px;" onclick="confirmEditItem('${fid}','${iid}')">Enregistrer</button>
+      </div>
+    </div>`;
+}
+
+async function confirmEditItem(fid, iid) {
+  const name   = document.getElementById('editName-' + iid).value.trim();
+  const detail = document.getElementById('editDetail-' + iid).value.trim();
+  if (!name) { alert('Nom requis'); return; }
+  await fetch(`/settings/folders/${fid}/items/${iid}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, detail })
+  });
+  await reloadSetupFolders();
+}
+
+async function deleteItem(fid, iid) {
+  if (!confirm('Supprimer cet item ?')) return;
+  await fetch(`/settings/folders/${fid}/items/${iid}`, { method: 'DELETE' });
+  await reloadSetupFolders();
+}
+
+async function reloadSetupFolders() {
+  const s = await fetch('/settings').then(r => r.json());
+  renderSetupFolders(s.setup?.folders || []);
+}
+
+// =====================
+// CONTEXTE IA dans le dossier
+// =====================
+let contexteIAOpen = false;
+
+function toggleContexteIA() {
+  contexteIAOpen = !contexteIAOpen;
+  document.getElementById('contexteIAList').style.display = contexteIAOpen ? 'block' : 'none';
+  document.getElementById('contexteIAArrow').innerHTML = contexteIAOpen ? '&#9650;' : '&#9660;';
+  if (contexteIAOpen) renderContexteIAList();
+}
+
+async function renderContexteIAList() {
+  const s = await fetch('/settings').then(r => r.json());
+  const folders = s.setup?.folders || [];
+  const selected = new Set(currentDossier?.setup_items || []);
+  const container = document.getElementById('contexteIAList');
+
+  if (!folders.length || !folders.some(f => f.items.length)) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">Aucun item configuré dans Setup IA.</p>';
+    return;
+  }
+
+  let html = '';
+  folders.forEach(f => {
+    f.items.forEach(i => {
+      const checked = selected.has(i.id);
+      html += `
+        <div class="ctx-item" onclick="toggleContexteItem('${i.id}', this)">
+          <div class="ctx-check ${checked ? 'checked' : ''}">${checked ? '&#10003;' : ''}</div>
+          <div class="ctx-label">
+            <div class="ctx-label-folder">${f.name}</div>
+            <div class="ctx-label-name">${i.name}</div>
+          </div>
+        </div>`;
+    });
+  });
+  container.innerHTML = html;
+}
+
+async function toggleContexteItem(itemId, rowEl) {
+  if (!currentDossier) return;
+  const items = new Set(currentDossier.setup_items || []);
+  const check = rowEl.querySelector('.ctx-check');
+  if (items.has(itemId)) {
+    items.delete(itemId);
+    check.classList.remove('checked');
+    check.innerHTML = '';
+  } else {
+    items.add(itemId);
+    check.classList.add('checked');
+    check.innerHTML = '&#10003;';
+  }
+  currentDossier.setup_items = [...items];
+  await fetch(`/dossiers/${currentDossier.id}/setup_items`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ setup_items: currentDossier.setup_items })
+  });
+}
+
+// =====================
+// MARKDOWN RENDERER
+// =====================
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function inlineFormat(s) {
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  return s;
+}
+function renderMarkdown(text) {
+  const lines = text.split('\n');
+  let html = '';
+  let inList = '';
+  function closeList() {
+    if (inList) { html += `</${inList}>`; inList = ''; }
+  }
+  lines.forEach(line => {
+    if (line.match(/^#{1,3}\s/)) {
+      closeList();
+      const content = line.replace(/^#+\s/, '');
+      html += `<p style="font-weight:700;color:var(--accent);font-size:13px;text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 4px;">${escHtml(content)}</p>`;
+    } else if (line.match(/^[-•*]\s/)) {
+      if (inList !== 'ul') { closeList(); html += '<ul style="padding-left:18px;margin:4px 0;">'; inList = 'ul'; }
+      html += `<li style="margin-bottom:3px;">${inlineFormat(escHtml(line.replace(/^[-•*]\s/, '')))}</li>`;
+    } else if (line.match(/^\d+\.\s/)) {
+      if (inList !== 'ol') { closeList(); html += '<ol style="padding-left:18px;margin:4px 0;">'; inList = 'ol'; }
+      html += `<li style="margin-bottom:3px;">${inlineFormat(escHtml(line.replace(/^\d+\.\s/, '')))}</li>`;
+    } else if (!line.trim()) {
+      closeList();
+    } else {
+      closeList();
+      html += `<p style="margin:3px 0;">${inlineFormat(escHtml(line))}</p>`;
+    }
+  });
+  closeList();
+  return html;
+}
+
+// =====================
+// Q&A NEUROSCIENCES
+// =====================
+function openAskPanel() {
+  document.getElementById('askBackdrop').classList.add('visible');
+  document.getElementById('askPanel').classList.add('visible');
+  document.getElementById('askInput').focus();
+}
+
+function closeAskPanel() {
+  document.getElementById('askBackdrop').classList.remove('visible');
+  document.getElementById('askPanel').classList.remove('visible');
+}
+
+async function submitQuestion() {
+  const question = document.getElementById('askInput').value.trim();
+  if (!question) return;
+
+  const container = currentScreen === 'screenMeetingDetail'
+    ? document.getElementById('meetingDetailOutput')
+    : document.getElementById('structuredOutput');
+  const context = container?.innerText?.trim() || '';
+
+  document.getElementById('askLoading').classList.add('visible');
+  document.getElementById('askResponse').classList.remove('visible');
+  document.getElementById('askSendBtn').disabled = true;
+
+  try {
+    const resp = await fetch('/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, context })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Erreur');
+    const el = document.getElementById('askResponse');
+    el.innerHTML = renderMarkdown(data.answer);
+    el.classList.add('visible');
+    document.getElementById('askInput').value = '';
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    document.getElementById('askLoading').classList.remove('visible');
+    document.getElementById('askSendBtn').disabled = false;
+  }
+}
+
+// =====================
+// INIT
+// =====================
+loadDossiers();
+</script>
+</body>
+</html>

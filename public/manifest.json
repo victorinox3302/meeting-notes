@@ -1,0 +1,10 @@
+{
+  "name": "Meeting Notes",
+  "short_name": "Meeting",
+  "description": "Enregistrez et transcrivez vos réunions",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a"
+}

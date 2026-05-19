@@ -1,0 +1,36 @@
+{
+  "profil": {
+    "prenom": "Romane",
+    "nom": "Huon",
+    "titre": "Neuro psychologue",
+    "cabinet": "Institut de la parentalité"
+  },
+  "setup": {
+    "context": "",
+    "folders": [
+      {
+        "id": "1",
+        "name": "Troubles santé",
+        "items": [
+          {
+            "id": "2",
+            "name": "TDAH",
+            "detail": "Le TDAH est un trouble du neurodéveloppement défini en clinique par un ensemble de symptômes persistants qui affectent le fonctionnement quotidien (école, travail, relations).\n\n🔎 Définition clinique\n\nSelon les classifications comme le DSM-5, le TDAH repose sur deux grandes dimensions :\n\nInattention\nHyperactivité / impulsivité\n\nCes symptômes doivent :\n\nêtre présents depuis l’enfance (avant 12 ans)\napparaître dans au moins deux contextes (ex : maison + école)\nentraîner une gêne fonctionnelle significative\nne pas être mieux expliqués par un autre trouble\n🧠 Les symptômes principaux\n\n1. Inattention\n\nDifficulté à soutenir l’attention\nErreurs d’étourderie\nOublis fréquents\nDésorganisation\nÉvitement des tâches longues ou demandant un effort mental\n\n2. Hyperactivité\n\nAgitation motrice (bouger constamment, se lever souvent)\nDifficulté à rester calme ou silencieux\n\n3. Impulsivité\n\nRépondre avant la fin des questions\nDifficulté à attendre son tour\nInterrompre les autres\n📊 Les présentations cliniques\n\nOn distingue généralement trois formes :\n\nPrésentation inattentive prédominante\nPrésentation hyperactive-impulsive prédominante\nPrésentation combinée\n🧬 Bases neurobiologiques\n\nLe TDAH est associé à :\n\ndes différences de fonctionnement dans certaines zones cérébrales (notamment cortex préfrontal)\nune régulation atypique de neurotransmetteurs comme la dopamine et la noradrénaline\nune forte composante génétique (héritabilité élevée)\n🧩 Diagnostic\n\nLe diagnostic est clinique, il n’existe pas de test biologique unique. Il repose sur :\n\ndes entretiens cliniques\ndes questionnaires standardisés\ndes informations provenant de l’entourage\n💊 Prise en charge\n\nElle est multimodale :\n\nPsychoéducation (comprendre le trouble)\nAménagements (organisation, environnement)\nThérapies cognitivo-comportementales\nParfois des médicaments (ex : méthylphénidate)"
+          }
+        ]
+      },
+      {
+        "id": "3",
+        "name": "Caractéristiques cognitive",
+        "items": [
+          {
+            "id": "4",
+            "name": "HPI",
+            "detail": "🔎 Définition (point de vue clinique et psychométrique)\n\nLe HPI est généralement identifié par :\n\nun QI ≥ 130 (soit environ les 2 % supérieurs de la population)\nmesuré à l’aide de tests standardisés comme les échelles de David Wechsler\n\nIl ne figure pas comme diagnostic dans les classifications psychiatriques (DSM-5, CIM-11).\n\n🧠 Profil cognitif\n\nLes personnes HPI présentent souvent :\n\nune vitesse de traitement élevée\nune forte capacité de raisonnement abstrait\nune grande mémoire de travail\nune curiosité intellectuelle marquée\n\nMais le profil peut être :\n\nhomogène (performances élevées partout)\nou hétérogène (écarts importants entre différentes capacités)\n🧩 Particularités associées (non systématiques)\n\nOn observe parfois :\n\nune pensée en arborescence\nune hypersensibilité émotionnelle\nun décalage avec les pairs (surtout chez l’enfant)\n\nCependant, ces éléments ne sont pas des critères diagnostiques officiels.\n\n⚠️ Différence essentielle avec un trouble\n\nContrairement aux troubles comme les troubles anxieux ou le TDAH :\n\nle HPI n’implique pas de dysfonctionnement\nil ne nécessite pas de traitement médical\nil ne correspond pas à une pathologie\n\nCela dit, un HPI peut coexister avec un trouble (on parle parfois de “double exceptionnalité”).\n\n📊 Identification\n\nL’évaluation se fait par :\n\nun bilan psychologique complet\nincluant des tests de QI et une analyse qualitative du fonctionnement"
+          }
+        ]
+      }
+    ],
+    "next_id": 5
+  }
+}

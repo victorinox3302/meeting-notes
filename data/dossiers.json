@@ -1,0 +1,49 @@
+{
+  "dossiers": [
+    {
+      "id": 1001,
+      "nom": "HUON",
+      "prenom": "Victor",
+      "created_at": "2026-04-24T09:57:46.752470",
+      "meetings": [
+        {
+          "date": "2026-04-24T10:06:40.364155",
+          "transcription": "Aujourd'hui nous reventerons le patient Victorillon qui vient pour des troubles du sommeil, ses parents sont inquiets parce que cela lui provoque des petites problématiques à l'école, notamment d'inattention.",
+          "compte_rendu": "## Résumé de la séance\nLe patient Victor a été revu pour des troubles du sommeil qui affectent son comportement et ses performances scolaires. Ses parents ont exprimé leur inquiétude quant aux problématiques d'inattention que cela entraîne à l'école. L'objectif de la séance était de discuter de ces troubles et de leurs impacts.\n\n## Points abordés\n* Troubles du sommeil du patient\n* Problématiques d'inattention à l'école\n* Inquiétudes des parents concernant les performances scolaires de Victor huon\n\n## Observations et décisions\n* Le patient présente des difficultés à dormir qui ont un impact sur son quotidien et ses études\n* Il est nécessaire de mettre en place des stratégies pour améliorer la qualité du sommeil de Victorillon\n* Une évaluation plus approfondie des causes sous-jacentes des troubles du sommeil est requise\n\n## Actions à suivre\n* Mettre en place un journal de sommeil pour suivre les habitudes de sommeil de Victorillon\n* Discuter avec les parents des stratégies pour améliorer l'environnement de sommeil et les habitudes de sommeil du patient\n* Planifier une évaluation complète des causes potentielles des troubles du sommeil\n\n## Prochaine séance\n* Une prochaine séance est prévue pour discuter des résultats du journal de sommeil et évaluer l'efficacité des stratégies mises en place\n* L'objectif est de réévaluer les progrès de Victorillon et ajuster le plan de traitement si nécessaire"
+        }
+      ],
+      "setup_items": []
+    },
+    {
+      "id": 1002,
+      "nom": "DUPONT",
+      "prenom": "Emilie",
+      "created_at": "2026-04-24T11:11:15.369369",
+      "setup_items": [],
+      "meetings": [
+        {
+          "date": "2026-04-24T11:14:44.720390",
+          "transcription": "Bonjour, comment allez-vous aujourd'hui ? Oh merci, ça va bien, tranquille. Donc aujourd'hui, vous venez pourquoi, concrètement ? Alors aujourd'hui, on vient pour Emily, notre fille qui est âgée de 6 ans, qui prouve en fait ce douleur de demande de l'école qui trouve Frémy-Dy, qui a quand même des petits problèmes de concentration en classe, et ils nous ont conseillé de lui consulter un psychologue pour déterminer s'il y avait des choses à mettre en place. D'accord, du coup, Emily, est-ce que vous pouvez me parler un peu de l'information générale, de sa situation actuelle par exemple ? Ah bah, actuellement, en l'ayant en salle et main, les cours c'est un peu moyen, mais ça va, par contre, problématique. Là, se socialise bien. Voilà, c'est une fille un peu tout à fait normale, effectivement, des fois, elle a un peu dans la lune, quoi. Les symptômes, si on pouvait parler de symptômes, ce serait quoi ? La fréquence ? Ah bah, c'est un peu... Le prof, on a de dire que c'est vraiment à chaque cours qu'elle a ce côté un peu, en fait, d'être dissipée surtout en fin de journée. Donc on n'a pas trouvé le plus comportement, mais vraiment des moments où en fait, elle va être vraiment dissipée ou dans la lune, parfois même ne pas répondre au professeur. D'accord. Vous, pendant tout ce qui est grossé, ce naissance, aucune problématique à signaler, ou non, très très bien, un accouchement un peu difficile, mais quelque chose d'assez classique dans ce cadre-là. D'accord. Et sa relation avec les autres élèves, ça se passe bien ? Oui, mais il y a des copains, pas de problématique là-dessus, se socialise bien. Elle fait émotionnel, la gestion des émotions, par exemple. Elle peut parfois effectivement faire des crises. À la maison, par exemple, si on doit servir un plat qui n'est pas tout à fait exactement comme elle le voulait, donc voilà. Et elle est quand même relativement, c'est un peu une pile électrique en plus d'être dans la lune. Toujours besoin de faire quelque chose et ainsi de suite. D'accord, très bien. Bah écoutez-moi ce que je vous conseille, mais comment on va voir la suite, c'est que moi je vais la recevoir en bilan, de suspéction TDRH, et c'est une séance, enfin, c'est une séance qui va durer une heure à 4, 5. Et à la fin, je vous ferai une restitution, vous vous dire effectivement qu'est-ce qu'il en est, comment elle se substitue dans la norme, etc. Ça vous va ? Oui, très bien, merci beaucoup.",
+          "compte_rendu": "## Résumé de la séance\nLa séance a porté sur les difficultés rencontrées par Emilie, âgée de 6 ans, qui présente des problèmes de concentration en classe. Les parents d'Emilie ont été conseillés par l'école de consulter un psychologue pour déterminer les causes de ces difficultés. Emilie a été décrite comme une fille normale, mais avec des moments de distraction et de dissipation, notamment en fin de journée.\n\n## Points abordés\n* Difficultés de concentration d'Emilie en classe\n* Comportement d'Emilie à la maison et à l'école\n* Relation d'Emilie avec les autres élèves\n* Gestion des émotions par Emilie\n* Antécédents médicaux et naissance d'Emilie\n\n## Observations et décisions\n* Emilie présente des symptômes de distraction et de dissipation, notamment en fin de journée\n* Emilie a des difficultés à gérer ses émotions, ce qui peut entraîner des crises\n* Une évaluation de la suspicion de TDAH (Trouble du Déficit de l'Attention/Hyperactivité) est envisagée\n\n## Actions à suivre\n* Réalisation d'un bilan pour évaluer les capacités d'Emilie et déterminer si elle présente des signes de TDAH\n* Restitution des résultats du bilan aux parents d'Emilie\n\n## Prochaine séance\n* Une séance de bilan est prévue, d'une durée d'une heure à 1h30, pour évaluer les capacités d'Emilie et déterminer les prochaines étapes à suivre."
+        }
+      ]
+    },
+    {
+      "id": 1003,
+      "nom": "TESTNOM3",
+      "prenom": "Test3",
+      "created_at": "2026-05-06T16:58:34.714113",
+      "setup_items": [],
+      "meetings": []
+    },
+    {
+      "id": 1004,
+      "nom": "BONNIVARD",
+      "prenom": "Davis",
+      "created_at": "2026-05-19T11:31:12.297672",
+      "setup_items": [],
+      "meetings": []
+    }
+  ],
+  "next_id": 1005
+}
