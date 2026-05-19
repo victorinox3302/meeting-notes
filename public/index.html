@@ -757,6 +757,11 @@ function stopRec() {
 function importAudioFile(input) {
   const file = input.files[0];
   if (!file) return;
+  if (file.size > 24 * 1024 * 1024) {
+    showError('Fichier trop grand (max 24MB). Utilisez un fichier MP3 ou M4A, ou enregistrez directement dans l\'app.');
+    input.value = '';
+    return;
+  }
   if (isRecording) stopRec();
   audioBlob = file;
   document.getElementById('audioPlayer').src = URL.createObjectURL(file);
