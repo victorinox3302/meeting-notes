@@ -757,8 +757,8 @@ function stopRec() {
 function importAudioFile(input) {
   const file = input.files[0];
   if (!file) return;
-  if (file.size > 24 * 1024 * 1024) {
-    showError('Fichier trop grand (max 24MB). Utilisez un fichier MP3 ou M4A, ou enregistrez directement dans l\'app.');
+  if (file.size > 10 * 1024 * 1024) {
+    showError('Fichier trop grand (max 10MB). Utilisez un fichier MP3 ou M4A compressé, ou enregistrez directement dans l\'app.');
     input.value = '';
     return;
   }
@@ -789,7 +789,8 @@ async function goToTranscribe() {
     const formData = new FormData();
     formData.append('audio', audioBlob, filename);
     const resp = await fetch('/transcribe', { method: 'POST', body: formData });
-    const data = await resp.json();
+    let data;
+    try { data = await resp.json(); } catch { throw new Error('Fichier trop volumineux pour Railway. Utilisez un fichier de moins de 10MB ou enregistrez directement dans l\'app.'); }
     if (!resp.ok) throw new Error(data.detail || 'Erreur transcription');
     currentTranscription = data.transcription;
     document.getElementById('transcriptBox').innerText = currentTranscription;
