@@ -17,7 +17,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 app = FastAPI()
 
-GROQ_API_KEY  = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY  = (os.getenv("GROQ_API_KEY") or "").strip()
 DATA_FILE     = Path(__file__).parent / "data" / "dossiers.json"
 SETTINGS_FILE = Path(__file__).parent / "data" / "settings.json"
 
