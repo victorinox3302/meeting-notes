@@ -18,6 +18,9 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 app = FastAPI()
 
 GROQ_API_KEY  = (os.getenv("GROQ_API_KEY") or "").strip()
+DATABASE_URL  = os.getenv("DATABASE_URL")
+
+# Chemins fichiers (utilisés uniquement en local sans DATABASE_URL)
 DATA_FILE     = Path(__file__).parent / "data" / "dossiers.json"
 SETTINGS_FILE = Path(__file__).parent / "data" / "settings.json"
 
@@ -27,25 +30,85 @@ SETTINGS_DEFAULT = {
 }
 
 
+# ─── Base de données ──────────────────────────────────────────────────────────
+
+def _get_conn():
+    import psycopg2
+    return psycopg2.connect(DATABASE_URL)
+
+def _init_db():
+    from psycopg2.extras import Json
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS store (
+                    key   TEXT PRIMARY KEY,
+                    value JSONB NOT NULL
+                )
+            """)
+            cur.execute("""
+                INSERT INTO store (key, value) VALUES
+                    ('dossiers', %s),
+                    ('settings', %s)
+                ON CONFLICT (key) DO NOTHING
+            """, [
+                Json({"dossiers": [], "next_id": 1001}),
+                Json(SETTINGS_DEFAULT),
+            ])
+
+@app.on_event("startup")
+def startup():
+    if DATABASE_URL:
+        _init_db()
+
+def _db_load(key: str):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT value FROM store WHERE key = %s", [key])
+            return cur.fetchone()[0]
+
+def _db_save(key: str, value):
+    from psycopg2.extras import Json
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO store (key, value) VALUES (%s, %s)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """, [key, Json(value)])
+
+
+# ─── Accès données (DB ou fichiers selon l'environnement) ────────────────────
+
 def load_data():
+    if DATABASE_URL:
+        return _db_load("dossiers")
     if not DATA_FILE.exists():
         DATA_FILE.parent.mkdir(exist_ok=True)
         DATA_FILE.write_text(json.dumps({"dossiers": [], "next_id": 1001}, ensure_ascii=False))
     return json.loads(DATA_FILE.read_text(encoding="utf-8"))
 
+def save_data(data):
+    if DATABASE_URL:
+        _db_save("dossiers", data)
+        return
+    DATA_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def load_settings():
-    if not SETTINGS_FILE.exists():
-        SETTINGS_FILE.parent.mkdir(exist_ok=True)
-        SETTINGS_FILE.write_text(json.dumps(SETTINGS_DEFAULT, ensure_ascii=False))
-    s = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-    # Migration anciens formats
+    if DATABASE_URL:
+        s = _db_load("settings")
+    else:
+        if not SETTINGS_FILE.exists():
+            SETTINGS_FILE.parent.mkdir(exist_ok=True)
+            SETTINGS_FILE.write_text(json.dumps(SETTINGS_DEFAULT, ensure_ascii=False))
+        s = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
     s["setup"].setdefault("folders", [])
     s["setup"].setdefault("next_id", 1)
     return s
 
-
 def save_settings(s):
+    if DATABASE_URL:
+        _db_save("settings", s)
+        return
     SETTINGS_FILE.write_text(json.dumps(s, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
