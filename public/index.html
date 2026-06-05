@@ -635,8 +635,8 @@ function enterApp(role) {
   currentUserRole = role;
   document.getElementById('authScreen').classList.remove('visible');
   document.getElementById('topbar').style.display = '';
-  document.getElementById('bottomNav').style.display = 'flex';
   document.getElementById('navSetup').style.display = role === 'admin' ? '' : 'none';
+  navTo('dossiers');
   loadDossiers();
 }
 
@@ -734,10 +734,15 @@ function showError(msg) {
 // DOSSIERS
 // =====================
 async function loadDossiers() {
-  const resp = await authFetch('/dossiers');
-  const data = await resp.json();
-  allDossiers = data.dossiers.slice().reverse();
-  renderDossiers(allDossiers);
+  try {
+    const resp = await authFetch('/dossiers');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    allDossiers = data.dossiers.slice().reverse();
+    renderDossiers(allDossiers);
+  } catch (e) {
+    if (e.message !== 'Session expirée, veuillez vous reconnecter') showError(e.message);
+  }
 }
 
 function renderDossiers(list) {
