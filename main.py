@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -34,17 +34,16 @@ SETTINGS_DEFAULT = {
     "setup": {"context": "", "folders": [], "next_id": 1}
 }
 
-pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return _bcrypt.checkpw(plain.encode(), hashed.encode())
 
 def create_token(user_id: int) -> str:
     expire = datetime.utcnow() + timedelta(days=TOKEN_DAYS)
