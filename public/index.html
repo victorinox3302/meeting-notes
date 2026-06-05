@@ -308,10 +308,50 @@
     .ctx-label { flex: 1; }
     .ctx-label-folder { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
     .ctx-label-name { font-size: 14px; font-weight: 600; }
+
+    /* Auth screen */
+    .auth-screen { display: none; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 24px; }
+    .auth-screen.visible { display: flex; }
+    .auth-logo { font-size: 36px; margin-bottom: 4px; }
+    .auth-title { font-size: 22px; font-weight: 700; }
+    .auth-subtitle { font-size: 14px; color: var(--text-muted); }
+    .auth-tabs { display: flex; background: var(--surface); border-radius: 12px; padding: 4px; gap: 4px; width: 100%; }
+    .auth-tab { flex: 1; padding: 9px; border: none; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; background: none; color: var(--text-muted); transition: all 0.2s; }
+    .auth-tab.active { background: var(--surface2); color: var(--text); }
+    .auth-form { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+    .auth-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #fca5a5; display: none; }
+    .auth-error.visible { display: block; }
   </style>
 </head>
 <body>
 <div class="app">
+
+  <!-- Écran de connexion / inscription -->
+  <div class="auth-screen visible" id="authScreen">
+    <div class="auth-logo">🧠</div>
+    <div>
+      <div class="auth-title">Meeting Notes</div>
+      <div class="auth-subtitle" style="text-align:center; margin-top:4px;">Votre assistant de consultation</div>
+    </div>
+    <div class="auth-tabs" style="max-width:340px;">
+      <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Connexion</button>
+      <button class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Inscription</button>
+    </div>
+    <div class="auth-form" style="max-width:340px;">
+      <div class="auth-error" id="authError"></div>
+      <div class="form-field">
+        <label>Email</label>
+        <input type="email" id="authEmail" placeholder="vous@exemple.com" autocomplete="email">
+      </div>
+      <div class="form-field">
+        <label>Mot de passe</label>
+        <input type="password" id="authPassword" placeholder="••••••••" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter') submitAuth()">
+      </div>
+      <button class="btn btn-primary" id="authSubmitBtn" onclick="submitAuth()">Se connecter</button>
+    </div>
+  </div>
+
   <div class="topbar" id="topbar">
     <h1 id="pageTitle">Dossiers</h1>
     <button class="back-btn" id="backBtn" style="display:none" onclick="handleBack()">Retour</button>
@@ -500,8 +540,11 @@
     <button class="nav-btn" id="navProfil" onclick="navTo('profil')">
       <span class="nav-icon">&#128100;</span>Profil
     </button>
-    <button class="nav-btn" id="navSetup" onclick="navTo('setup')">
+    <button class="nav-btn" id="navSetup" onclick="navTo('setup')" style="display:none">
       <span class="nav-icon">&#9881;</span>Setup IA
+    </button>
+    <button class="nav-btn" id="navLogout" onclick="logout()" style="color:var(--danger)">
+      <span class="nav-icon">&#8594;</span>Quitter
     </button>
   </nav>
 
@@ -530,6 +573,98 @@
 </div><!-- end app -->
 
 <script>
+// =====================
+// AUTH
+// =====================
+let currentUserRole = null;
+
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem('token');
+  if (token) {
+    options.headers = options.headers || {};
+    options.headers['Authorization'] = 'Bearer ' + token;
+  }
+  return fetch(url, options).then(resp => {
+    if (resp.status === 401 && !url.startsWith('/auth/')) {
+      logout();
+      throw new Error('Session expirée, veuillez vous reconnecter');
+    }
+    return resp;
+  });
+}
+
+function switchAuthTab(tab) {
+  document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+  document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+  document.getElementById('authSubmitBtn').textContent = tab === 'login' ? 'Se connecter' : "S'inscrire";
+  document.getElementById('authError').classList.remove('visible');
+  document.getElementById('authPassword').autocomplete = tab === 'login' ? 'current-password' : 'new-password';
+}
+
+async function submitAuth() {
+  const isLogin = document.getElementById('tabLogin').classList.contains('active');
+  const email    = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl    = document.getElementById('authError');
+  errEl.classList.remove('visible');
+  if (!email || !password) { errEl.textContent = 'Email et mot de passe requis'; errEl.classList.add('visible'); return; }
+  const btn = document.getElementById('authSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const resp = await fetch(isLogin ? '/auth/login' : '/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Erreur');
+    localStorage.setItem('token', data.access_token);
+    localStorage.setItem('role', data.role);
+    enterApp(data.role);
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.add('visible');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = isLogin ? 'Se connecter' : "S'inscrire";
+  }
+}
+
+function enterApp(role) {
+  currentUserRole = role;
+  document.getElementById('authScreen').classList.remove('visible');
+  document.getElementById('topbar').style.display = '';
+  document.getElementById('bottomNav').style.display = 'flex';
+  document.getElementById('navSetup').style.display = role === 'admin' ? '' : 'none';
+  loadDossiers();
+}
+
+function logout() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('role');
+  currentUserRole = null;
+  document.getElementById('authScreen').classList.add('visible');
+  document.getElementById('topbar').style.display = 'none';
+  document.getElementById('bottomNav').style.display = 'none';
+  document.getElementById('authEmail').value = '';
+  document.getElementById('authPassword').value = '';
+}
+
+async function initApp() {
+  const token = localStorage.getItem('token');
+  const role  = localStorage.getItem('role');
+  if (!token) { logout(); return; }
+  try {
+    const resp = await authFetch('/auth/me');
+    if (!resp.ok) { logout(); return; }
+    const user = await resp.json();
+    enterApp(user.role);
+  } catch {
+    logout();
+  }
+}
+
 // =====================
 // STATE
 // =====================
@@ -599,7 +734,7 @@ function showError(msg) {
 // DOSSIERS
 // =====================
 async function loadDossiers() {
-  const resp = await fetch('/dossiers');
+  const resp = await authFetch('/dossiers');
   const data = await resp.json();
   allDossiers = data.dossiers.slice().reverse();
   renderDossiers(allDossiers);
@@ -633,7 +768,7 @@ async function createDossier() {
   const prenom = document.getElementById('inputPrenom').value.trim();
   const nom = document.getElementById('inputNom').value.trim();
   if (!prenom || !nom) { showError('Prénom et nom requis'); return; }
-  const resp = await fetch('/dossiers', {
+  const resp = await authFetch('/dossiers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prenom, nom })
@@ -649,7 +784,7 @@ async function createDossier() {
 function openDossier(d) {
   currentDossier = d;
   // Reload fresh data
-  fetch('/dossiers').then(r => r.json()).then(data => {
+  authFetch('/dossiers').then(r => r.json()).then(data => {
     const fresh = data.dossiers.find(x => x.id === d.id) || d;
     currentDossier = fresh;
     const banner = document.getElementById('detailBanner');
@@ -788,7 +923,7 @@ async function goToTranscribe() {
     const filename = audioBlob.name || (audioBlob.type.includes('mp4') ? 'recording.mp4' : 'recording.webm');
     const formData = new FormData();
     formData.append('audio', audioBlob, filename);
-    const resp = await fetch('/transcribe', { method: 'POST', body: formData });
+    const resp = await authFetch('/transcribe', { method: 'POST', body: formData });
     let data;
     try { data = await resp.json(); } catch { throw new Error('Fichier trop volumineux pour Railway. Utilisez un fichier de moins de 10MB ou enregistrez directement dans l\'app.'); }
     if (!resp.ok) throw new Error(data.detail || 'Erreur transcription');
@@ -819,7 +954,7 @@ async function goToStructure() {
   document.getElementById('structuredContent').style.display = 'none';
 
   try {
-    const resp = await fetch('/structure', {
+    const resp = await authFetch('/structure', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -838,7 +973,7 @@ async function goToStructure() {
 
     // Sauvegarde automatique dans le dossier
     if (currentDossier) {
-      await fetch(`/dossiers/${currentDossier.id}/meetings`, {
+      await authFetch(`/dossiers/${currentDossier.id}/meetings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcription: currentTranscription, compte_rendu: currentStructured })
@@ -992,7 +1127,7 @@ async function saveStructuredChanges() {
   if (meetingIndex < 0) return;
 
   try {
-    await fetch(`/dossiers/${currentDossier.id}/meetings/${meetingIndex}`, {
+    await authFetch(`/dossiers/${currentDossier.id}/meetings/${meetingIndex}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ compte_rendu: newText })
@@ -1047,7 +1182,7 @@ async function exportDetailToWord() {
 
 async function downloadDocx(text, patiente, numero, date) {
   try {
-    const resp = await fetch('/export-docx', {
+    const resp = await authFetch('/export-docx', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, patiente, numero, date })
@@ -1129,7 +1264,7 @@ showScreen = function(id, title, showBack, showSteps) {
 // PROFIL
 // =====================
 async function loadProfilFields() {
-  const s = await fetch('/settings').then(r => r.json());
+  const s = await authFetch('/settings').then(r => r.json());
   const p = s.profil || {};
   document.getElementById('profilTitre').value   = p.titre   || '';
   document.getElementById('profilPrenom').value  = p.prenom  || '';
@@ -1138,7 +1273,7 @@ async function loadProfilFields() {
 }
 
 async function saveProfil() {
-  await fetch('/settings', {
+  await authFetch('/settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profil: {
@@ -1156,13 +1291,13 @@ async function saveProfil() {
 // SETUP IA — instructions générales
 // =====================
 async function loadSetupField() {
-  const s = await fetch('/settings').then(r => r.json());
+  const s = await authFetch('/settings').then(r => r.json());
   document.getElementById('setupContext').value = s.setup?.context || '';
   renderSetupFolders(s.setup?.folders || []);
 }
 
 async function saveSetup() {
-  await fetch('/settings', {
+  await authFetch('/settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ setup: { context: document.getElementById('setupContext').value.trim() }})
@@ -1244,7 +1379,7 @@ function toggleFolder(fid) {
 async function createFolder() {
   const name = prompt('Nom du dossier :');
   if (!name?.trim()) return;
-  await fetch('/settings/folders', {
+  await authFetch('/settings/folders', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name.trim() })
   });
@@ -1255,7 +1390,7 @@ async function editFolderName(fid) {
   const current = document.getElementById('sfFolderName-' + fid).textContent;
   const name = prompt('Nouveau nom :', current);
   if (!name?.trim() || name.trim() === current) return;
-  await fetch(`/settings/folders/${fid}`, {
+  await authFetch(`/settings/folders/${fid}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name.trim() })
   });
@@ -1264,7 +1399,7 @@ async function editFolderName(fid) {
 
 async function deleteFolder(fid) {
   if (!confirm('Supprimer ce dossier et tous ses items ?')) return;
-  await fetch(`/settings/folders/${fid}`, { method: 'DELETE' });
+  await authFetch(`/settings/folders/${fid}`, { method: 'DELETE' });
   await reloadSetupFolders();
 }
 
@@ -1294,7 +1429,7 @@ async function confirmAddItem(fid) {
   const name   = document.getElementById('newItemName-' + fid).value.trim();
   const detail = document.getElementById('newItemDetail-' + fid).value.trim();
   if (!name) { alert('Nom requis'); return; }
-  await fetch(`/settings/folders/${fid}/items`, {
+  await authFetch(`/settings/folders/${fid}/items`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, detail })
   });
@@ -1321,7 +1456,7 @@ async function confirmEditItem(fid, iid) {
   const name   = document.getElementById('editName-' + iid).value.trim();
   const detail = document.getElementById('editDetail-' + iid).value.trim();
   if (!name) { alert('Nom requis'); return; }
-  await fetch(`/settings/folders/${fid}/items/${iid}`, {
+  await authFetch(`/settings/folders/${fid}/items/${iid}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, detail })
   });
@@ -1330,12 +1465,12 @@ async function confirmEditItem(fid, iid) {
 
 async function deleteItem(fid, iid) {
   if (!confirm('Supprimer cet item ?')) return;
-  await fetch(`/settings/folders/${fid}/items/${iid}`, { method: 'DELETE' });
+  await authFetch(`/settings/folders/${fid}/items/${iid}`, { method: 'DELETE' });
   await reloadSetupFolders();
 }
 
 async function reloadSetupFolders() {
-  const s = await fetch('/settings').then(r => r.json());
+  const s = await authFetch('/settings').then(r => r.json());
   renderSetupFolders(s.setup?.folders || []);
 }
 
@@ -1352,7 +1487,7 @@ function toggleContexteIA() {
 }
 
 async function renderContexteIAList() {
-  const s = await fetch('/settings').then(r => r.json());
+  const s = await authFetch('/settings').then(r => r.json());
   const folders = s.setup?.folders || [];
   const selected = new Set(currentDossier?.setup_items || []);
   const container = document.getElementById('contexteIAList');
@@ -1393,7 +1528,7 @@ async function toggleContexteItem(itemId, rowEl) {
     check.innerHTML = '&#10003;';
   }
   currentDossier.setup_items = [...items];
-  await fetch(`/dossiers/${currentDossier.id}/setup_items`, {
+  await authFetch(`/dossiers/${currentDossier.id}/setup_items`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ setup_items: currentDossier.setup_items })
   });
@@ -1468,7 +1603,7 @@ async function submitQuestion() {
   document.getElementById('askSendBtn').disabled = true;
 
   try {
-    const resp = await fetch('/ask', {
+    const resp = await authFetch('/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, context })
@@ -1490,7 +1625,10 @@ async function submitQuestion() {
 // =====================
 // INIT
 // =====================
-loadDossiers();
+// Masquer l'app jusqu'à l'auth
+document.getElementById('topbar').style.display = 'none';
+document.getElementById('bottomNav').style.display = 'none';
+initApp();
 </script>
 </body>
 </html>

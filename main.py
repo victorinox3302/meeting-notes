@@ -1,26 +1,31 @@
 import io
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 app = FastAPI()
 
-GROQ_API_KEY  = (os.getenv("GROQ_API_KEY") or "").strip()
+GROQ_API_KEY = (os.getenv("GROQ_API_KEY") or "").strip()
 DATABASE_URL  = os.getenv("DATABASE_URL")
+SECRET_KEY    = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
+ALGORITHM     = "HS256"
+TOKEN_DAYS    = 30
 
-# Chemins fichiers (utilisés uniquement en local sans DATABASE_URL)
 DATA_FILE     = Path(__file__).parent / "data" / "dossiers.json"
 SETTINGS_FILE = Path(__file__).parent / "data" / "settings.json"
 
@@ -28,6 +33,47 @@ SETTINGS_DEFAULT = {
     "profil": {"prenom": "", "nom": "", "titre": "", "cabinet": ""},
     "setup": {"context": "", "folders": [], "next_id": 1}
 }
+
+pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+
+
+# ─── Auth ─────────────────────────────────────────────────────────────────────
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def create_token(user_id: int) -> str:
+    expire = datetime.utcnow() + timedelta(days=TOKEN_DAYS)
+    return jwt.encode({"sub": user_id, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    if not DATABASE_URL:
+        return {"id": 0, "email": "local@dev", "role": "admin"}
+    if not token:
+        raise HTTPException(401, "Non authentifié")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(401, "Token invalide")
+    except JWTError:
+        raise HTTPException(401, "Token invalide")
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, email, role FROM users WHERE id = %s", [int(user_id)])
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(401, "Utilisateur introuvable")
+            return {"id": row[0], "email": row[1], "role": row[2]}
+
+async def require_admin(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(403, "Accès réservé aux administrateurs")
+    return user
 
 
 # ─── Base de données ──────────────────────────────────────────────────────────
@@ -40,62 +86,117 @@ def _init_db():
     from psycopg2.extras import Json
     with _get_conn() as conn:
         with conn.cursor() as cur:
+            # Table utilisateurs
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS store (
-                    key   TEXT PRIMARY KEY,
-                    value JSONB NOT NULL
+                CREATE TABLE IF NOT EXISTS users (
+                    id            SERIAL PRIMARY KEY,
+                    email         TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    role          TEXT NOT NULL DEFAULT 'user',
+                    created_at    TIMESTAMP DEFAULT NOW()
                 )
             """)
+
+            # Détection du schéma actuel de store
             cur.execute("""
-                INSERT INTO store (key, value) VALUES
-                    ('dossiers', %s),
-                    ('settings', %s)
-                ON CONFLICT (key) DO NOTHING
-            """, [
-                Json({"dossiers": [], "next_id": 1001}),
-                Json(SETTINGS_DEFAULT),
-            ])
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'store'
+            """)
+            columns = [r[0] for r in cur.fetchall()]
+
+            if not columns:
+                # Nouvelle installation
+                cur.execute("""
+                    CREATE TABLE store (
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        key     TEXT NOT NULL,
+                        value   JSONB NOT NULL,
+                        PRIMARY KEY (user_id, key)
+                    )
+                """)
+            elif "user_id" not in columns:
+                # Ancienne installation sans user_id — migration
+                cur.execute("SELECT key, value FROM store")
+                old_data = {r[0]: r[1] for r in cur.fetchall()}
+                cur.execute("DROP TABLE store")
+                cur.execute("""
+                    CREATE TABLE store (
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        key     TEXT NOT NULL,
+                        value   JSONB NOT NULL,
+                        PRIMARY KEY (user_id, key)
+                    )
+                """)
+                # Créer l'admin
+                admin_hash = hash_password("Admin2024!")
+                cur.execute("""
+                    INSERT INTO users (email, password_hash, role)
+                    VALUES ('vhuon75@gmail.com', %s, 'admin')
+                    ON CONFLICT (email) DO NOTHING
+                    RETURNING id
+                """, [admin_hash])
+                row = cur.fetchone()
+                if not row:
+                    cur.execute("SELECT id FROM users WHERE email = 'vhuon75@gmail.com'")
+                    admin_id = cur.fetchone()[0]
+                else:
+                    admin_id = row[0]
+                # Migrer les données existantes vers l'admin
+                for key, value in old_data.items():
+                    cur.execute("""
+                        INSERT INTO store (user_id, key, value) VALUES (%s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                    """, [admin_id, key, Json(value)])
 
 @app.on_event("startup")
 def startup():
     if DATABASE_URL:
         _init_db()
 
-def _db_load(key: str):
+def _db_load(user_id: int, key: str):
     with _get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT value FROM store WHERE key = %s", [key])
-            return cur.fetchone()[0]
+            cur.execute("SELECT value FROM store WHERE user_id = %s AND key = %s", [user_id, key])
+            row = cur.fetchone()
+            return row[0] if row else None
 
-def _db_save(key: str, value):
+def _db_save(user_id: int, key: str, value):
     from psycopg2.extras import Json
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO store (key, value) VALUES (%s, %s)
-                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-            """, [key, Json(value)])
+                INSERT INTO store (user_id, key, value) VALUES (%s, %s, %s)
+                ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value
+            """, [user_id, key, Json(value)])
 
 
-# ─── Accès données (DB ou fichiers selon l'environnement) ────────────────────
+# ─── Accès données ────────────────────────────────────────────────────────────
 
-def load_data():
-    if DATABASE_URL:
-        return _db_load("dossiers")
+def load_data(user_id=None):
+    if DATABASE_URL and user_id is not None:
+        data = _db_load(user_id, "dossiers")
+        if data is None:
+            data = {"dossiers": [], "next_id": 1001}
+            _db_save(user_id, "dossiers", data)
+        return data
     if not DATA_FILE.exists():
         DATA_FILE.parent.mkdir(exist_ok=True)
         DATA_FILE.write_text(json.dumps({"dossiers": [], "next_id": 1001}, ensure_ascii=False))
     return json.loads(DATA_FILE.read_text(encoding="utf-8"))
 
-def save_data(data):
-    if DATABASE_URL:
-        _db_save("dossiers", data)
+def save_data(data, user_id=None):
+    if DATABASE_URL and user_id is not None:
+        _db_save(user_id, "dossiers", data)
         return
     DATA_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-def load_settings():
-    if DATABASE_URL:
-        s = _db_load("settings")
+def load_settings(user_id=None):
+    if DATABASE_URL and user_id is not None:
+        s = _db_load(user_id, "settings")
+        if s is None:
+            import copy
+            s = copy.deepcopy(SETTINGS_DEFAULT)
+            _db_save(user_id, "settings", s)
     else:
         if not SETTINGS_FILE.exists():
             SETTINGS_FILE.parent.mkdir(exist_ok=True)
@@ -105,98 +206,143 @@ def load_settings():
     s["setup"].setdefault("next_id", 1)
     return s
 
-def save_settings(s):
-    if DATABASE_URL:
-        _db_save("settings", s)
+def save_settings(s, user_id=None):
+    if DATABASE_URL and user_id is not None:
+        _db_save(user_id, "settings", s)
         return
     SETTINGS_FILE.write_text(json.dumps(s, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def save_data(data):
-    DATA_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
+# ─── Static ───────────────────────────────────────────────────────────────────
 
 app.mount("/static", StaticFiles(directory="public"), name="static")
-
 
 @app.get("/")
 def index():
     return FileResponse("public/index.html")
 
 
-# ─── Settings ────────────────────────────────────────────────────────────────
+# ─── Auth endpoints ───────────────────────────────────────────────────────────
+
+@app.post("/auth/register")
+async def register(request: Request):
+    body = await request.json()
+    email    = body.get("email", "").strip().lower()
+    password = body.get("password", "").strip()
+    if not email or not password:
+        raise HTTPException(400, "Email et mot de passe requis")
+    if len(password) < 6:
+        raise HTTPException(400, "Mot de passe trop court (6 caractères minimum)")
+    if not DATABASE_URL:
+        raise HTTPException(500, "Auth non disponible en mode local")
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE email = %s", [email])
+            if cur.fetchone():
+                raise HTTPException(400, "Email déjà utilisé")
+            cur.execute(
+                "INSERT INTO users (email, password_hash, role) VALUES (%s, %s, 'user') RETURNING id",
+                [email, hash_password(password)]
+            )
+            user_id = cur.fetchone()[0]
+    import copy
+    _db_save(user_id, "dossiers", {"dossiers": [], "next_id": 1001})
+    _db_save(user_id, "settings", copy.deepcopy(SETTINGS_DEFAULT))
+    return {"access_token": create_token(user_id), "token_type": "bearer", "role": "user"}
+
+@app.post("/auth/login")
+async def login(request: Request):
+    body = await request.json()
+    email    = body.get("email", "").strip().lower()
+    password = body.get("password", "").strip()
+    if not DATABASE_URL:
+        raise HTTPException(500, "Auth non disponible en mode local")
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, password_hash, role FROM users WHERE email = %s", [email])
+            row = cur.fetchone()
+    if not row or not verify_password(password, row[1]):
+        raise HTTPException(401, "Email ou mot de passe incorrect")
+    return {"access_token": create_token(row[0]), "token_type": "bearer", "role": row[2]}
+
+@app.get("/auth/me")
+async def me(user=Depends(get_current_user)):
+    return user
+
+
+# ─── Settings ─────────────────────────────────────────────────────────────────
 
 @app.get("/settings")
-def get_settings():
-    return load_settings()
+def get_settings(user=Depends(get_current_user)):
+    return load_settings(user["id"])
 
 @app.post("/settings")
-async def post_settings(request: Request):
+async def post_settings(request: Request, user=Depends(get_current_user)):
     body = await request.json()
-    s = load_settings()
+    s = load_settings(user["id"])
     if "profil" in body:
         s["profil"].update(body["profil"])
     if "setup" in body:
         for k, v in body["setup"].items():
-            if k not in ("folders", "next_id"):   # ne pas écraser via cette route
+            if k not in ("folders", "next_id"):
                 s["setup"][k] = v
-    save_settings(s)
+    save_settings(s, user["id"])
     return s
 
 
-# ─── Setup : dossiers & items ─────────────────────────────────────────────────
+# ─── Setup : dossiers & items (admin uniquement) ──────────────────────────────
 
 @app.post("/settings/folders")
-async def create_folder(request: Request):
+async def create_folder(request: Request, user=Depends(require_admin)):
     body = await request.json()
     name = body.get("name", "").strip()
     if not name:
         raise HTTPException(400, "Nom requis")
-    s = load_settings()
+    s = load_settings(user["id"])
     folder = {"id": str(s["setup"]["next_id"]), "name": name, "items": []}
     s["setup"]["next_id"] += 1
     s["setup"]["folders"].append(folder)
-    save_settings(s)
+    save_settings(s, user["id"])
     return folder
 
 @app.put("/settings/folders/{fid}")
-async def update_folder(fid: str, request: Request):
+async def update_folder(fid: str, request: Request, user=Depends(require_admin)):
     body = await request.json()
-    s = load_settings()
+    s = load_settings(user["id"])
     folder = next((f for f in s["setup"]["folders"] if f["id"] == fid), None)
     if not folder:
         raise HTTPException(404, "Dossier introuvable")
     folder["name"] = body.get("name", folder["name"]).strip()
-    save_settings(s)
+    save_settings(s, user["id"])
     return folder
 
 @app.delete("/settings/folders/{fid}")
-async def delete_folder(fid: str):
-    s = load_settings()
+async def delete_folder(fid: str, user=Depends(require_admin)):
+    s = load_settings(user["id"])
     s["setup"]["folders"] = [f for f in s["setup"]["folders"] if f["id"] != fid]
-    save_settings(s)
+    save_settings(s, user["id"])
     return {"ok": True}
 
 @app.post("/settings/folders/{fid}/items")
-async def create_item(fid: str, request: Request):
+async def create_item(fid: str, request: Request, user=Depends(require_admin)):
     body = await request.json()
     name = body.get("name", "").strip()
     if not name:
         raise HTTPException(400, "Nom requis")
-    s = load_settings()
+    s = load_settings(user["id"])
     folder = next((f for f in s["setup"]["folders"] if f["id"] == fid), None)
     if not folder:
         raise HTTPException(404, "Dossier introuvable")
     item = {"id": str(s["setup"]["next_id"]), "name": name, "detail": body.get("detail", "").strip()}
     s["setup"]["next_id"] += 1
     folder["items"].append(item)
-    save_settings(s)
+    save_settings(s, user["id"])
     return item
 
 @app.put("/settings/folders/{fid}/items/{iid}")
-async def update_item(fid: str, iid: str, request: Request):
+async def update_item(fid: str, iid: str, request: Request, user=Depends(require_admin)):
     body = await request.json()
-    s = load_settings()
+    s = load_settings(user["id"])
     folder = next((f for f in s["setup"]["folders"] if f["id"] == fid), None)
     if not folder:
         raise HTTPException(404, "Dossier introuvable")
@@ -205,34 +351,34 @@ async def update_item(fid: str, iid: str, request: Request):
         raise HTTPException(404, "Item introuvable")
     if "name"   in body: item["name"]   = body["name"].strip()
     if "detail" in body: item["detail"] = body["detail"].strip()
-    save_settings(s)
+    save_settings(s, user["id"])
     return item
 
 @app.delete("/settings/folders/{fid}/items/{iid}")
-async def delete_item(fid: str, iid: str):
-    s = load_settings()
+async def delete_item(fid: str, iid: str, user=Depends(require_admin)):
+    s = load_settings(user["id"])
     folder = next((f for f in s["setup"]["folders"] if f["id"] == fid), None)
     if folder:
         folder["items"] = [i for i in folder["items"] if i["id"] != iid]
-        save_settings(s)
+        save_settings(s, user["id"])
     return {"ok": True}
 
 
 # ─── Dossiers ─────────────────────────────────────────────────────────────────
 
 @app.get("/dossiers")
-def list_dossiers():
-    data = load_data()
+def list_dossiers(user=Depends(get_current_user)):
+    data = load_data(user["id"])
     return {"dossiers": data["dossiers"], "next_id": data["next_id"]}
 
 @app.post("/dossiers")
-async def create_dossier(request: Request):
-    body = await request.json()
+async def create_dossier(request: Request, user=Depends(get_current_user)):
+    body   = await request.json()
     nom    = body.get("nom",    "").strip().upper()
     prenom = body.get("prenom", "").strip().capitalize()
     if not nom or not prenom:
         raise HTTPException(400, "Nom et prénom requis")
-    data = load_data()
+    data = load_data(user["id"])
     dossier = {
         "id": data["next_id"],
         "nom": nom,
@@ -243,24 +389,24 @@ async def create_dossier(request: Request):
     }
     data["dossiers"].append(dossier)
     data["next_id"] += 1
-    save_data(data)
+    save_data(data, user["id"])
     return dossier
 
 @app.put("/dossiers/{dossier_id}/setup_items")
-async def update_dossier_setup_items(dossier_id: int, request: Request):
+async def update_dossier_setup_items(dossier_id: int, request: Request, user=Depends(get_current_user)):
     body = await request.json()
-    data = load_data()
+    data = load_data(user["id"])
     dossier = next((d for d in data["dossiers"] if d["id"] == dossier_id), None)
     if not dossier:
         raise HTTPException(404, "Dossier introuvable")
     dossier["setup_items"] = body.get("setup_items", [])
-    save_data(data)
+    save_data(data, user["id"])
     return {"ok": True}
 
 @app.post("/dossiers/{dossier_id}/meetings")
-async def add_meeting(dossier_id: int, request: Request):
+async def add_meeting(dossier_id: int, request: Request, user=Depends(get_current_user)):
     body = await request.json()
-    data = load_data()
+    data = load_data(user["id"])
     dossier = next((d for d in data["dossiers"] if d["id"] == dossier_id), None)
     if not dossier:
         raise HTTPException(404, "Dossier introuvable")
@@ -270,35 +416,35 @@ async def add_meeting(dossier_id: int, request: Request):
         "compte_rendu":  body.get("compte_rendu",  "")
     }
     dossier["meetings"].append(meeting)
-    save_data(data)
+    save_data(data, user["id"])
     return meeting
 
 @app.patch("/dossiers/{dossier_id}/meetings/{meeting_index}")
-async def update_meeting(dossier_id: int, meeting_index: int, request: Request):
+async def update_meeting(dossier_id: int, meeting_index: int, request: Request, user=Depends(get_current_user)):
     body = await request.json()
-    data = load_data()
+    data = load_data(user["id"])
     dossier = next((d for d in data["dossiers"] if d["id"] == dossier_id), None)
     if not dossier:
         raise HTTPException(404, "Dossier introuvable")
     if meeting_index < 0 or meeting_index >= len(dossier["meetings"]):
         raise HTTPException(404, "Séance introuvable")
     dossier["meetings"][meeting_index]["compte_rendu"] = body.get("compte_rendu", "")
-    save_data(data)
+    save_data(data, user["id"])
     return dossier["meetings"][meeting_index]
 
 @app.delete("/dossiers/{dossier_id}")
-async def delete_dossier(dossier_id: int):
-    data = load_data()
+async def delete_dossier(dossier_id: int, user=Depends(get_current_user)):
+    data = load_data(user["id"])
     data["dossiers"] = [d for d in data["dossiers"] if d["id"] != dossier_id]
-    save_data(data)
+    save_data(data, user["id"])
     return {"ok": True}
 
 
-# ─── Export Word ─────────────────────────────────────────────────────────────
+# ─── Export Word ──────────────────────────────────────────────────────────────
 
 @app.post("/export-docx")
-async def export_docx(request: Request):
-    body = await request.json()
+async def export_docx(request: Request, user=Depends(get_current_user)):
+    body     = await request.json()
     text     = body.get("text", "").strip()
     patiente = body.get("patiente", "").strip()
     numero   = body.get("numero")
@@ -307,13 +453,10 @@ async def export_docx(request: Request):
         raise HTTPException(400, "Texte manquant")
 
     doc = Document()
-
-    # Styles de base
     style = doc.styles["Normal"]
     style.font.name = "Calibri"
     style.font.size = Pt(11)
 
-    # Titre
     title_line = f"Compte rendu — {patiente}" if patiente else "Compte rendu"
     if patiente and numero:
         title_line += f" (N°{numero})"
@@ -326,7 +469,6 @@ async def export_docx(request: Request):
         p.runs[0].font.size = Pt(10)
         doc.add_paragraph("")
 
-    # Parse les sections ## ...
     sections = text.split("\n")
     current_title = None
     current_lines = []
@@ -357,8 +499,8 @@ async def export_docx(request: Request):
     buf.seek(0)
 
     safe_name = patiente.replace(" ", "_") if patiente else "patiente"
-    date_slug = datetime.now().strftime("%Y-%m-%d")
-    filename  = f"CR_{safe_name}_{date_slug}.docx"
+    date_slug  = datetime.now().strftime("%Y-%m-%d")
+    filename   = f"CR_{safe_name}_{date_slug}.docx"
 
     return StreamingResponse(
         buf,
@@ -367,11 +509,11 @@ async def export_docx(request: Request):
     )
 
 
-# ─── Q&A Neurosciences ───────────────────────────────────────────────────────
+# ─── Q&A Neurosciences ────────────────────────────────────────────────────────
 
 @app.post("/ask")
-async def ask(request: Request):
-    data = await request.json()
+async def ask(request: Request, user=Depends(get_current_user)):
+    data     = await request.json()
     question = data.get("question", "").strip()
     context  = data.get("context",  "").strip()
     if not question:
@@ -383,7 +525,6 @@ async def ask(request: Request):
         "Réponds de manière concise, précise et professionnelle en français, "
         "en t'appuyant sur les données scientifiques actuelles et les meilleures pratiques cliniques."
     )
-
     user_msg = question
     if context:
         user_msg = f"Contexte — compte rendu de la séance en cours :\n{context}\n\nQuestion : {question}"
@@ -409,9 +550,9 @@ async def ask(request: Request):
 # ─── Transcription ────────────────────────────────────────────────────────────
 
 @app.post("/transcribe")
-async def transcribe(audio: UploadFile = File(...)):
-    file_bytes = await audio.read()
-    filename = audio.filename or "audio.mp3"
+async def transcribe(audio: UploadFile = File(...), user=Depends(get_current_user)):
+    file_bytes   = await audio.read()
+    filename     = audio.filename or "audio.mp3"
     content_type = audio.content_type or "audio/mpeg"
 
     async with httpx.AsyncClient() as client:
@@ -432,8 +573,8 @@ async def transcribe(audio: UploadFile = File(...)):
 # ─── Structuration ────────────────────────────────────────────────────────────
 
 @app.post("/structure")
-async def structure(request: Request):
-    data = await request.json()
+async def structure(request: Request, user=Depends(get_current_user)):
+    data          = await request.json()
     transcription = data.get("transcription", "").strip()
     prenom        = data.get("prenom", "").strip()
     nom           = data.get("nom",    "").strip()
@@ -443,8 +584,7 @@ async def structure(request: Request):
 
     patient_ref = f"{prenom} {nom}".strip() if prenom else "la patiente"
 
-    # Profil praticien + instructions générales
-    settings = load_settings()
+    settings     = load_settings(user["id"])
     profil       = settings.get("profil", {})
     setup_ctx    = settings.get("setup", {}).get("context", "").strip()
     praticien    = " ".join(p for p in [profil.get("titre",""), profil.get("prenom",""), profil.get("nom","")] if p).strip()
@@ -458,11 +598,10 @@ async def structure(request: Request):
         if setup_ctx: context_block += f"- Instructions générales : {setup_ctx}\n"
         context_block += "\n"
 
-    # Items setup associés au dossier patient
     items_block = ""
     if dossier_id:
         try:
-            doss_data = load_data()
+            doss_data = load_data(user["id"])
             doss = next((d for d in doss_data["dossiers"] if d["id"] == int(dossier_id)), None)
             if doss and doss.get("setup_items"):
                 items_map = {
