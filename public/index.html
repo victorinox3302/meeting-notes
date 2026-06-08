@@ -644,6 +644,7 @@ function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('role');
   currentUserRole = null;
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('visible'));
   document.getElementById('authScreen').classList.add('visible');
   document.getElementById('topbar').style.display = 'none';
   document.getElementById('bottomNav').style.display = 'none';
