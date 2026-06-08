@@ -797,10 +797,40 @@ function openDossier(d) {
     const fresh = data.dossiers.find(x => x.id === d.id) || d;
     currentDossier = fresh;
     const banner = document.getElementById('detailBanner');
-    banner.innerHTML = `<div class="badge">N° ${fresh.id}</div><div class="name">${fresh.prenom} ${fresh.nom}</div>`;
+    banner.innerHTML = `<div class="badge">N° ${fresh.id}</div><div class="name">${fresh.prenom} ${fresh.nom}</div><button class="edit-btn" onclick="editDossierName()" title="Modifier" style="margin-left:auto;">&#9998;</button>`;
     renderMeetings(fresh);
     showScreen('screenDossierDetail', `${fresh.prenom} ${fresh.nom}`, true, false);
   });
+}
+
+function editDossierName() {
+  const banner = document.getElementById('detailBanner');
+  banner.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
+      <div style="display:flex;gap:8px;">
+        <input class="sf-inline-input" id="editPrenom" placeholder="Prénom" value="${currentDossier.prenom}" style="flex:1;">
+        <input class="sf-inline-input" id="editNom" placeholder="NOM" value="${currentDossier.nom}" style="flex:1;">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" style="padding:8px;font-size:13px;" onclick="openDossier(currentDossier)">Annuler</button>
+        <button class="btn btn-primary" style="padding:8px;font-size:13px;" onclick="saveDossierName()">Enregistrer</button>
+      </div>
+    </div>`;
+}
+
+async function saveDossierName() {
+  const prenom = document.getElementById('editPrenom').value.trim();
+  const nom    = document.getElementById('editNom').value.trim();
+  if (!prenom || !nom) { showError('Prénom et nom requis'); return; }
+  const resp = await authFetch(`/dossiers/${currentDossier.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prenom, nom })
+  });
+  if (!resp.ok) { showError('Erreur lors de la modification'); return; }
+  const updated = await resp.json();
+  currentDossier = { ...currentDossier, ...updated };
+  openDossier(currentDossier);
 }
 
 function renderMeetings(dossier) {

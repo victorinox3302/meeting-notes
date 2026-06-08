@@ -443,6 +443,22 @@ async def create_dossier(request: Request, user=Depends(get_current_user)):
     save_data(data, user["id"])
     return dossier
 
+@app.put("/dossiers/{dossier_id}")
+async def update_dossier(dossier_id: int, request: Request, user=Depends(get_current_user)):
+    body   = await request.json()
+    nom    = body.get("nom",    "").strip().upper()
+    prenom = body.get("prenom", "").strip().capitalize()
+    if not nom or not prenom:
+        raise HTTPException(400, "Nom et prénom requis")
+    data = load_data(user["id"])
+    dossier = next((d for d in data["dossiers"] if d["id"] == dossier_id), None)
+    if not dossier:
+        raise HTTPException(404, "Dossier introuvable")
+    dossier["nom"]    = nom
+    dossier["prenom"] = prenom
+    save_data(data, user["id"])
+    return dossier
+
 @app.put("/dossiers/{dossier_id}/setup_items")
 async def update_dossier_setup_items(dossier_id: int, request: Request, user=Depends(get_current_user)):
     body = await request.json()
