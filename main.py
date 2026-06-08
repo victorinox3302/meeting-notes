@@ -11,7 +11,7 @@ import httpx
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -260,7 +260,7 @@ def index():
 # ─── Auth endpoints ───────────────────────────────────────────────────────────
 
 @app.post("/auth/register")
-async def register(request: Request):
+async def register(request: Request, background_tasks: BackgroundTasks):
     body = await request.json()
     email    = body.get("email", "").strip().lower()
     password = body.get("password", "").strip()
@@ -283,7 +283,7 @@ async def register(request: Request):
     import copy
     _db_save(user_id, "dossiers", {"dossiers": [], "next_id": 1001})
     _db_save(user_id, "settings", copy.deepcopy(SETTINGS_DEFAULT))
-    send_welcome_email(email)
+    background_tasks.add_task(send_welcome_email, email)
     return {"access_token": create_token(user_id), "token_type": "bearer", "role": "user"}
 
 @app.post("/auth/login")
