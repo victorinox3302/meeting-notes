@@ -98,8 +98,7 @@ def send_welcome_email(to_email: str):
         msg["From"]    = f"Meeting Notes <{SMTP_EMAIL}>"
         msg["To"]      = to_email
         msg.attach(MIMEText(html, "html"))
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.starttls()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(SMTP_EMAIL, SMTP_PASSWORD)
             server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
     except Exception:
