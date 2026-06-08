@@ -396,8 +396,8 @@
       <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;">
         <div class="dossier-banner" id="detailBanner"></div>
 
-        <!-- Contexte IA associé -->
-        <div class="card" style="margin-bottom:10px;">
+        <!-- Contexte IA associé (admin uniquement) -->
+        <div class="card" id="contexteIACard" style="margin-bottom:10px; display:none;">
           <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleContexteIA()">
             <div class="label" style="margin-bottom:0;">Contexte IA</div>
             <span id="contexteIAArrow" style="color:var(--text-muted); font-size:13px;">&#9660;</span>
@@ -637,6 +637,7 @@ function enterApp(role) {
   document.getElementById('topbar').style.display = '';
   document.getElementById('mainContent').style.display = '';
   document.getElementById('navSetup').style.display = role === 'admin' ? '' : 'none';
+  document.getElementById('contexteIACard').style.display = role === 'admin' ? '' : 'none';
   navTo('dossiers');
   loadDossiers();
 }
