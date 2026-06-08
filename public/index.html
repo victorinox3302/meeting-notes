@@ -365,7 +365,7 @@
 
   <div class="error-banner" id="errorBanner"></div>
 
-  <div class="content">
+  <div class="content" id="mainContent" style="display:none">
 
     <!-- SCREEN: Liste des dossiers -->
     <div class="screen visible" id="screenDossiers">
@@ -635,6 +635,7 @@ function enterApp(role) {
   currentUserRole = role;
   document.getElementById('authScreen').classList.remove('visible');
   document.getElementById('topbar').style.display = '';
+  document.getElementById('mainContent').style.display = '';
   document.getElementById('navSetup').style.display = role === 'admin' ? '' : 'none';
   navTo('dossiers');
   loadDossiers();
@@ -648,6 +649,7 @@ function logout() {
   document.getElementById('authScreen').classList.add('visible');
   document.getElementById('topbar').style.display = 'none';
   document.getElementById('bottomNav').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'none';
   document.getElementById('authEmail').value = '';
   document.getElementById('authPassword').value = '';
 }
