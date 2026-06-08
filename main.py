@@ -617,7 +617,7 @@ async def structure(request: Request, user=Depends(get_current_user)):
     if not transcription:
         raise HTTPException(400, "Transcription vide")
 
-    patient_ref = f"{prenom} {nom}".strip() if prenom else "la patiente"
+    patient_ref = f"{prenom} {nom}".strip() if prenom else "le patient"
 
     settings     = load_settings(user["id"])
     profil       = settings.get("profil", {})
@@ -653,13 +653,13 @@ async def structure(request: Request, user=Depends(get_current_user)):
                             line += f" : {detail}"
                         lines.append(line)
                 if lines:
-                    items_block = "Informations spécifiques à " + (prenom or "la patiente") + " :\n" + "\n".join(lines) + "\n\n"
+                    items_block = "Informations spécifiques à " + (prenom or "le patient") + " :\n" + "\n".join(lines) + "\n\n"
         except Exception:
             pass
 
     prompt = f"""Tu es un assistant expert en comptes rendus de consultation médicale ou de suivi patient.
 
-{context_block}{items_block}La patiente s'appelle {patient_ref}. Dans tout le compte rendu, réfère-toi à elle uniquement par son prénom "{prenom or patient_ref}".
+{context_block}{items_block}Le patient s'appelle {patient_ref}. Dans tout le compte rendu, réfère-toi à lui uniquement par son prénom "{prenom or patient_ref}".
 
 Voici la transcription brute de la séance :
 \"\"\"{transcription}\"\"\"
@@ -667,7 +667,7 @@ Voici la transcription brute de la séance :
 Génère un compte rendu structuré, clair et professionnel en français avec exactement ces sections :
 
 ## Résumé de la séance
-(2-3 phrases résumant l'essentiel, en utilisant le prénom de la patiente)
+(2-3 phrases résumant l'essentiel, en utilisant le prénom du patient)
 
 ## Points abordés
 (liste à puces)
@@ -681,7 +681,7 @@ Génère un compte rendu structuré, clair et professionnel en français avec ex
 ## Prochaine séance
 (liste à puces ou date/objectif si mentionné)
 
-Sois concis, factuel et professionnel. Respecte les instructions spécifiques. Utilise le prénom {prenom or "de la patiente"} dès que tu parles d'elle."""
+Sois concis, factuel et professionnel. Respecte les instructions spécifiques. Utilise le prénom {prenom or "du patient"} dès que tu parles de lui."""
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(

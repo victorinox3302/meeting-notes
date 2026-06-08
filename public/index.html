@@ -369,7 +369,7 @@
 
     <!-- SCREEN: Liste des dossiers -->
     <div class="screen visible" id="screenDossiers">
-      <input class="search-bar" id="searchInput" type="search" placeholder="Rechercher une patiente..." oninput="filterDossiers()">
+      <input class="search-bar" id="searchInput" type="search" placeholder="Rechercher un patient..." oninput="filterDossiers()">
       <div class="dossier-list" id="dossierList"></div>
       <div class="footer">
         <button class="btn btn-primary" onclick="showScreen('screenNewDossier')">+ Nouveau dossier</button>
@@ -751,7 +751,7 @@ async function loadDossiers() {
 function renderDossiers(list) {
   const container = document.getElementById('dossierList');
   if (list.length === 0) {
-    container.innerHTML = '<div class="empty-state">Aucun dossier.<br>Créez le premier dossier patiente.</div>';
+    container.innerHTML = '<div class="empty-state">Aucun dossier.<br>Créez le premier dossier patient.</div>';
     return;
   }
   container.innerHTML = list.map(d => `
