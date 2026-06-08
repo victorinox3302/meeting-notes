@@ -194,6 +194,22 @@ def _db_load(user_id: int, key: str):
             row = cur.fetchone()
             return row[0] if row else None
 
+def _get_admin_id() -> int:
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE role = 'admin' LIMIT 1")
+            row = cur.fetchone()
+            return row[0] if row else 1
+
+def _get_admin_settings():
+    s = _db_load(_get_admin_id(), "settings")
+    if s is None:
+        import copy
+        return copy.deepcopy(SETTINGS_DEFAULT)
+    s["setup"].setdefault("folders", [])
+    s["setup"].setdefault("next_id", 1)
+    return s
+
 def _db_save(user_id: int, key: str, value):
     from psycopg2.extras import Json
     with _get_conn() as conn:
@@ -619,11 +635,15 @@ async def structure(request: Request, user=Depends(get_current_user)):
 
     patient_ref = f"{prenom} {nom}".strip() if prenom else "le patient"
 
-    settings     = load_settings(user["id"])
-    profil       = settings.get("profil", {})
-    setup_ctx    = settings.get("setup", {}).get("context", "").strip()
-    praticien    = " ".join(p for p in [profil.get("titre",""), profil.get("prenom",""), profil.get("nom","")] if p).strip()
-    cabinet      = profil.get("cabinet", "").strip()
+    # Profil du praticien connecté
+    user_settings = load_settings(user["id"])
+    profil        = user_settings.get("profil", {})
+    praticien     = " ".join(p for p in [profil.get("titre",""), profil.get("prenom",""), profil.get("nom","")] if p).strip()
+    cabinet       = profil.get("cabinet", "").strip()
+
+    # Setup IA toujours depuis le compte admin
+    admin_settings = _get_admin_settings()
+    setup_ctx      = admin_settings.get("setup", {}).get("context", "").strip()
 
     context_block = ""
     if praticien or cabinet or setup_ctx:
@@ -641,7 +661,7 @@ async def structure(request: Request, user=Depends(get_current_user)):
             if doss and doss.get("setup_items"):
                 items_map = {
                     i["id"]: (f["name"], i["name"], i.get("detail", ""))
-                    for f in settings.get("setup", {}).get("folders", [])
+                    for f in admin_settings.get("setup", {}).get("folders", [])
                     for i in f.get("items", [])
                 }
                 lines = []
