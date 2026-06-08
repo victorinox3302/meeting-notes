@@ -1,6 +1,9 @@
 import io
 import os
 import json
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -20,9 +23,11 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 app = FastAPI()
 
-GROQ_API_KEY = (os.getenv("GROQ_API_KEY") or "").strip()
+GROQ_API_KEY  = (os.getenv("GROQ_API_KEY") or "").strip()
 DATABASE_URL  = os.getenv("DATABASE_URL")
 SECRET_KEY    = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
+SMTP_EMAIL    = os.getenv("SMTP_EMAIL", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 ALGORITHM     = "HS256"
 TOKEN_DAYS    = 30
 
@@ -68,6 +73,39 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             if not row:
                 raise HTTPException(401, "Utilisateur introuvable")
             return {"id": row[0], "email": row[1], "role": row[2]}
+
+def send_welcome_email(to_email: str):
+    if not SMTP_EMAIL or not SMTP_PASSWORD:
+        return
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "Bienvenue sur Meeting Notes"
+        msg["From"]    = SMTP_EMAIL
+        msg["To"]      = to_email
+
+        html = f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0f172a;color:#f1f5f9;border-radius:16px;">
+          <h1 style="font-size:22px;margin-bottom:8px;">🧠 Meeting Notes</h1>
+          <p style="color:#94a3b8;margin-bottom:24px;">Votre assistant de consultation</p>
+          <p>Bonjour,</p>
+          <p>Votre compte a bien été créé. Vous pouvez dès maintenant vous connecter et commencer à utiliser l'application.</p>
+          <a href="https://meeting-notes-p2yr.onrender.com"
+             style="display:inline-block;margin-top:24px;padding:14px 28px;background:#6366f1;color:#fff;border-radius:12px;text-decoration:none;font-weight:600;">
+            Accéder à l'application
+          </a>
+          <p style="margin-top:32px;color:#64748b;font-size:13px;">
+            Si vous n'êtes pas à l'origine de cette inscription, ignorez cet email.
+          </p>
+        </div>
+        """
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
+    except Exception:
+        pass  # Ne bloque pas l'inscription si l'email échoue
 
 async def require_admin(user=Depends(get_current_user)):
     if user["role"] != "admin":
@@ -247,6 +285,7 @@ async def register(request: Request):
     import copy
     _db_save(user_id, "dossiers", {"dossiers": [], "next_id": 1001})
     _db_save(user_id, "settings", copy.deepcopy(SETTINGS_DEFAULT))
+    send_welcome_email(email)
     return {"access_token": create_token(user_id), "token_type": "bearer", "role": "user"}
 
 @app.post("/auth/login")
